@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CMA Mumbai Planner</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>CMA Mumbai Planner</h1>
+        <p>Batch timetable, faculty allocation, and syllabus completion control.</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="ghost" id="exportBtn" title="Export data">Export</button>
+        <label class="ghost file-trigger" title="Import data">
+          Import
+          <input id="importFile" type="file" accept="application/json">
+        </label>
+        <button class="ghost" id="cloudLoadBtn" title="Load planner data from Google">Cloud Load</button>
+        <button id="cloudSaveBtn" title="Save planner data to Google">Cloud Save</button>
+      </div>
+    </header>
+
+    <main>
+      <nav class="tabs" aria-label="Views">
+        <button class="tab active" data-view="dashboard">Dashboard</button>
+        <button class="tab" data-view="weekly">Weekly Table</button>
+        <button class="tab" data-view="planner">Timetable</button>
+        <button class="tab" data-view="professorPlanning">Professor Planning</button>
+        <button class="tab" data-view="professorLogin">Professor Login</button>
+        <button class="tab" data-view="masters">Masters</button>
+      </nav>
+
+      <section class="filters" aria-label="Batch filters">
+        <label>
+          Centre
+          <select id="centreFilter"></select>
+        </label>
+        <label>
+          Attempt
+          <select id="attemptFilter"></select>
+        </label>
+        <label>
+          Level
+          <select id="levelFilter"></select>
+        </label>
+        <label>
+          Time Slot
+          <select id="timeSlotFilter"></select>
+        </label>
+        <label>
+          Day
+          <select id="dayFilter"></select>
+        </label>
+        <label>
+          Professor
+          <select id="professorFilter"></select>
+        </label>
+      </section>
+
+      <section class="view active" id="dashboardView">
+        <div class="kpi-grid" id="kpiGrid"></div>
+        <div class="split">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Batchwise Details</h2>
+              <span id="lastUpdated"></span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Batch</th>
+                    <th>Centre</th>
+                    <th>Level</th>
+                    <th>Planned Hrs</th>
+                    <th>Hrs Till Date</th>
+                    <th>Completion Date</th>
+                    <th>Week Left</th>
+                    <th>Weekly Hrs Required</th>
+                    <th>% Syllabus Completed</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="batchTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Alerts</h2>
+                <span id="alertCount"></span>
+              </div>
+              <label>
+                Alert Type
+                <select id="alertTypeFilter" multiple></select>
+              </label>
+            </div>
+            <div class="alert-list" id="alerts"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="weeklyView">
+        <section class="panel">
+          <div class="panel-head weekly-head">
+            <div>
+              <h2>Weekly Timetable</h2>
+              <span>Edit date, time, batch, professor, and subject in one view.</span>
+            </div>
+            <div class="weekly-tools">
+              <button class="ghost" id="prevWeekBtn" type="button">Previous</button>
+              <label>
+                Week Starting
+                <input id="weekStart" type="date">
+              </label>
+              <button class="ghost" id="nextWeekBtn" type="button">Next</button>
+              <label class="column-size-field">
+                Column Size
+                <input id="weeklyColumnSize" type="range" min="130" max="280" step="10">
+              </label>
+              <label class="sheet-link-field">
+                Google Sheet
+                <input id="googleSheetLinkInput" type="url" placeholder="Paste Google Sheet link">
+              </label>
+              <button id="addWeeklyRowBtn" type="button">Add Time Slot</button>
+              <button class="import-sheet-btn" id="importGoogleSheetBtn" type="button" title="Import timetable from Google Sheet for the selected week">Import Google Sheet</button>
+            </div>
+          </div>
+          <div class="insight-grid compact-insights" id="weeklyInsights" aria-label="Weekly timetable analytics"></div>
+          <div class="table-wrap">
+            <table class="weekly-table">
+              <thead id="weeklyHead"></thead>
+              <tbody id="weeklyTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="plannerView">
+        <div class="share-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Batch-wise Share</h2>
+                <span>Ready message for students of one batch.</span>
+              </div>
+              <div class="share-actions">
+                <select id="batchShareSelect"></select>
+                <button class="ghost" id="copyBatchShareBtn" type="button">Copy</button>
+                <button class="ghost" id="downloadBatchImageBtn" type="button">Image</button>
+                <button id="telegramBatchShareBtn" type="button">Telegram</button>
+              </div>
+            </div>
+            <div class="share-panel-body">
+              <div class="timetable-card" id="batchTimetablePreview"></div>
+              <div class="share-info-card" id="batchShareInfo"></div>
+            </div>
+            <textarea class="share-box" id="batchShareText" readonly></textarea>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Professor-wise Share</h2>
+                <span>Ready message for faculty allocation.</span>
+              </div>
+              <div class="share-actions">
+                <select id="professorShareSelect"></select>
+                <button class="ghost" id="copyProfessorShareBtn" type="button">Copy</button>
+                <button class="ghost" id="downloadProfessorImageBtn" type="button">Professor Image</button>
+                <button id="telegramProfessorShareBtn" type="button">Telegram</button>
+              </div>
+            </div>
+            <div class="share-panel-body">
+              <div class="timetable-card" id="professorTimetablePreview"></div>
+              <div class="share-info-card" id="professorShareInfo"></div>
+            </div>
+            <textarea class="share-box" id="professorShareText" readonly></textarea>
+          </section>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Daily Timetable</h2>
+              <span id="dailyTimetableCount"></span>
+            </div>
+            <label>
+              Date
+              <input id="dailyDateFilter" type="date">
+            </label>
+            <label>
+              Level
+              <select id="dailyLevelFilter"></select>
+            </label>
+            <label>
+              Location
+              <select id="dailyCentreFilter"></select>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Batch</th>
+                  <th>Centre</th>
+                  <th>Professor</th>
+                  <th>Paper</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="dailyTimetableTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="professorPlanningView">
+        <section class="insight-grid" id="professorPlanningInsights" aria-label="Professor planning insights"></section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Faculty Monthly Hours</h2>
+              <span>Professor-wise month hours for the selected level and month.</span>
+            </div>
+            <div class="share-actions">
+              <label>
+                Level
+                <select id="professorSummaryLevel"></select>
+              </label>
+              <label>
+                Professor
+                <select id="professorSummaryProfessor"></select>
+              </label>
+              <label>
+                Month
+                <input id="professorSummaryMonth" type="month">
+              </label>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Professor</th>
+                  <th>Level</th>
+                  <th>Month Total Hrs</th>
+                  <th>Actual Hrs Taken</th>
+                </tr>
+              </thead>
+              <tbody id="professorMonthlySummaryTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>1. Professor Syllabus Allocation</h2>
+              <span>Select level, professor, subject, and allocate syllabus batchwise.</span>
+            </div>
+            <div class="share-actions">
+              <label>
+                Level
+                <select id="professorAllocationLevel"></select>
+              </label>
+              <label>
+                Attempt
+                <select id="professorAllocationAttempt"></select>
+              </label>
+              <label>
+                Professor Name
+                <select id="professorPlanSelect"></select>
+              </label>
+              <label>
+                Subject
+                <select id="professorPlanPaperFilter"></select>
+              </label>
+            </div>
+          </div>
+          <form id="topicPlanForm" class="form-grid compact"></form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Batch Name</th>
+                  <th>Branch</th>
+                  <th>Level</th>
+                  <th>Attempt</th>
+                  <th>Professor</th>
+                  <th>Paper</th>
+                  <th>Total Planned Hrs Syllabus Allocated</th>
+                  <th>Time Table Available</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="topicPlanTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>2. Professor Time Table Batchwise</h2>
+              <span>Professor timetable filtered batchwise by professor name and paper.</span>
+            </div>
+            <div class="share-actions">
+              <label>
+                Level
+                <select id="professorTimetableLevel"></select>
+              </label>
+              <label>
+                Attempt
+                <select id="professorTimetableAttempt"></select>
+              </label>
+              <label>
+                Professor Name
+                <select id="professorTimetableSelect"></select>
+              </label>
+              <label>
+                Paper
+                <select id="professorTimetablePaperFilter"></select>
+              </label>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Batch Name</th>
+                  <th>Branch</th>
+                  <th>Level</th>
+                  <th>Attempt</th>
+                  <th>Paper</th>
+                  <th>Total Hrs Allocated in Time Table</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody id="professorPlanTimetable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>3. Professor Actual Batch Hours So Far</h2>
+              <span>Compare timetable allocated hours with actual hours entered by professor.</span>
+            </div>
+            <div class="share-actions">
+              <label>
+                Level
+                <select id="professorHoursLevel"></select>
+              </label>
+              <label>
+                Attempt
+                <select id="professorHoursAttempt"></select>
+              </label>
+              <label>
+                Professor Name
+                <select id="professorHoursProfessorSelect"></select>
+              </label>
+              <label>
+                Month
+                <input id="professorHoursMonth" type="month">
+              </label>
+              <label>
+                From
+                <input id="professorHoursFrom" type="date">
+              </label>
+              <label>
+                To
+                <input id="professorHoursTo" type="date">
+              </label>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Professor</th>
+                  <th>Batch Name</th>
+                  <th>Branch</th>
+                  <th>Level</th>
+                  <th>Attempt</th>
+                  <th>Paper</th>
+                  <th>Total Hrs Allocated in Time Table</th>
+                  <th>Actual Hrs Taken</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="professorBatchHoursReport"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Batch Allocation Master</h2>
+              <span>Batchwise paper, professor name, and total syllabus hours allocated.</span>
+            </div>
+            <div class="share-actions">
+              <label>
+                Level
+                <select id="batchMasterLevel"></select>
+              </label>
+              <label>
+                Attempt
+                <select id="batchMasterAttempt"></select>
+              </label>
+            </div>
+          </div>
+          <div class="insight-grid compact-insights" id="batchAllocationInsights" aria-label="Batch allocation analytics"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Batch Name</th>
+                  <th>Branch</th>
+                  <th>Level</th>
+                  <th>Attempt</th>
+                  <th>Papers</th>
+                  <th>Professor Name</th>
+                  <th>Total Hrs Syllabus Allocated</th>
+                  <th>Time Table Available</th>
+                  <th>Actual Hrs Taken</th>
+                  <th>Balance Syllabus Hrs</th>
+                  <th>Utilization</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="batchAllocationMasterReport"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="professorLoginView">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Professor Login</h2>
+              <span>Faculty can enter actual topic taught, time in, and time out after lecture.</span>
+            </div>
+            <label>
+              Professor
+              <select id="professorLoginSelect"></select>
+            </label>
+          </div>
+          <form id="professorActualForm" class="form-grid"></form>
+        </section>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Actual Lecture Records</h2>
+            <span id="professorActualCount"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Batch</th>
+                  <th>Topic</th>
+                  <th>Actual Hrs</th>
+                  <th>Time In-Out</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody id="professorActualTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="mastersView">
+        <div class="master-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Create Batch</h2>
+              <span>Each batch is one level, attempt, and location.</span>
+            </div>
+            <form id="batchForm" class="form-grid compact"></form>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Master Data</h2>
+              <span>Add centres, Telegram settings, and free Google cloud sync.</span>
+            </div>
+            <form id="masterForm" class="form-grid compact"></form>
+          </section>
+        </div>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>All Batches</h2>
+            <span id="masterBatchCount"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Batch</th>
+                  <th>Level</th>
+                  <th>Attempt</th>
+                  <th>Centre</th>
+                  <th>Target</th>
+                  <th>Telegram Chat ID</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="masterBatchTable"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Professor Management</h2>
+              <span>Add or edit professor name, level bucket, and paper numbers they can teach.</span>
+            </div>
+            <div class="faculty-view">
+              <button class="tiny ghost active" data-professor-view="all" type="button">All Faculty</button>
+              <button class="tiny ghost" data-professor-view="level" type="button">Levelwise</button>
+              <button class="tiny ghost" data-professor-view="paper" type="button">Paperwise</button>
+            </div>
+          </div>
+          <form id="professorManagementForm" class="form-grid compact"></form>
+          <div class="faculty-filter-row">
+            <label>
+              Level
+              <select id="professorManagementLevel"></select>
+            </label>
+            <label>
+              Paper No.
+              <select id="professorManagementPaper"></select>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Professor Name</th>
+                  <th>Levels</th>
+                  <th>Paper Nos.</th>
+                  <th>Mapped Papers</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="professorManagementTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <template id="fieldTemplate">
+      <label>
+        <span></span>
+        <input>
+      </label>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
