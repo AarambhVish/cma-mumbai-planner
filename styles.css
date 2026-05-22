@@ -145,6 +145,33 @@ input[type="file"] {
   user-select: none;
 }
 
+.professor-mode .owner-only,
+.professor-mode .file-trigger,
+.professor-mode #exportBtn,
+.professor-mode #cloudSaveBtn {
+  display: none !important;
+}
+
+.professor-mode .tabs,
+.professor-mode .filters {
+  display: none !important;
+}
+
+.professor-mode main {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.professor-mode #professorLoginView {
+  display: block;
+}
+
+.professor-mode .topbar p::after {
+  content: " Professor access";
+  font-weight: 700;
+  color: var(--brand);
+}
+
 .login-gate,
 .cloud-start {
   position: fixed;
@@ -878,6 +905,61 @@ tr:last-child td {
   color: var(--blue);
 }
 
+.changes-tt-box {
+  min-height: 150px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  background: #fffdf4;
+}
+
+.changes-tt-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #d8e2ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.changed-tag {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.changes-tt-batch-preview {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.changes-tt-batch-preview article {
+  border: 1px solid #d8e2ec;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.changes-tt-batch-preview h3 {
+  margin: 0;
+  padding: 10px 12px;
+  background: #eef6f8;
+  color: var(--brand-dark);
+  font-size: 15px;
+}
+
+.changes-tt-batch-preview table {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.changes-tt-batch-preview th,
+.changes-tt-batch-preview td {
+  padding: 8px 10px;
+}
+
 .dummy-row td {
   background: #f7fbff;
 }
@@ -995,8 +1077,15 @@ tr:last-child td {
 
 #professorManagementTable th:last-child,
 #professorManagementTable td:last-child {
-  width: 132px;
-  min-width: 132px;
+  width: 210px;
+  min-width: 210px;
+}
+
+#professorManagementTable th:nth-child(5),
+#professorManagementTable td:nth-child(5),
+#professorManagementTable th:nth-child(6),
+#professorManagementTable td:nth-child(6) {
+  min-width: 150px;
 }
 
 .professor-name-cell {

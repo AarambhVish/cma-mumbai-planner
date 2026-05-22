@@ -1,5 +1,6 @@
 const storeKey = "cma-mumbai-planner-v1";
 const dummyReportTag = "dummy-report-data";
+const changedTTSource = "changed-tt";
 const googleSheetSource = {
   id: "1QC7jdICqY237tKxiOLWJtDJ5Huaa4HSA",
   sheet: "Batch Wise",
@@ -927,6 +928,8 @@ function ensureDataShape() {
     ...professor,
     levels: Array.isArray(professor.levels) && professor.levels.length ? professor.levels : inferProfessorLevels(professor),
     papers: Array.isArray(professor.papers) && professor.papers.length ? professor.papers : inferProfessorPapers(professor),
+    loginId: professor.loginId || professor.id || slug(professor.name),
+    loginPassword: professor.loginPassword || `cma${String(professor.id || slug(professor.name)).replace(/[^a-z0-9]/gi, "").slice(0, 4)}`,
     color: professor.color || professorPalette[data.professors.findIndex((item) => item.id === professor.id) % professorPalette.length]
   }));
   data.batches = data.batches.map((batch, index) => ({
@@ -1250,6 +1253,8 @@ function saveData() {
 }
 
 const loginSessionKey = "cma-planner-login-ok";
+const loginRoleKey = "cma-planner-login-role";
+const loginProfessorKey = "cma-planner-login-professor";
 const loginId = "CMATT";
 const loginPassword = "cma";
 let cloudSaveReminderId = null;
@@ -1258,9 +1263,79 @@ function isLoggedIn() {
   return sessionStorage.getItem(loginSessionKey) === "yes";
 }
 
+function currentLoginRole() {
+  return sessionStorage.getItem(loginRoleKey) || "owner";
+}
+
+function isProfessorMode() {
+  return isLoggedIn() && currentLoginRole() === "professor";
+}
+
+function loggedInProfessorId() {
+  return isProfessorMode() ? sessionStorage.getItem(loginProfessorKey) || "" : "";
+}
+
+function professorLoginId(professor) {
+  return cleanSheetText(professor.loginId || professor.id || slug(professor.name));
+}
+
+function professorPassword(professor) {
+  return cleanSheetText(professor.loginPassword || `cma${String(professor.id || slug(professor.name)).replace(/[^a-z0-9]/gi, "").slice(0, 4)}`);
+}
+
+function professorLoginShareMessage(professor) {
+  return [
+    "Dear Sir/Madam,",
+    "",
+    "Please use this link to update actual lecture details:",
+    "",
+    "App Link:",
+    "https://aarambhvish.github.io/cma-mumbai-planner/",
+    "",
+    `Login ID: ${professorLoginId(professor)}`,
+    `Password: ${professorPassword(professor)}`,
+    "",
+    "Steps:",
+    "1. Open link",
+    "2. Press Cloud Load",
+    "3. Your scheduled lectures will appear",
+    "4. Select lecture",
+    "5. Enter actual topic, actual hours, and remarks",
+    "6. Press Submit Actual Lecture",
+    "7. The system will send the save request automatically",
+    "",
+    "Please update after every lecture."
+  ].join("\n");
+}
+
+function setActiveView(viewName) {
+  $$(".tab").forEach((item) => item.classList.toggle("active", item.dataset.view === viewName));
+  $$(".view").forEach((view) => view.classList.remove("active"));
+  $(`#${viewName}View`)?.classList.add("active");
+  updateFilterVisibility(viewName);
+}
+
+function applyAccessMode() {
+  const professorMode = isProfessorMode();
+  document.body.classList.toggle("professor-mode", professorMode);
+  $$(".tab").forEach((tab) => {
+    tab.classList.toggle("hidden", professorMode && tab.dataset.view !== "professorLogin");
+  });
+  if (professorMode) setActiveView("professorLogin");
+  const label = $("#professorLoginSelect")?.closest("label");
+  if (label) label.classList.toggle("hidden", professorMode);
+  const professorHeading = $("#professorLoginView .panel-head h2");
+  if (professorHeading) professorHeading.textContent = professorMode ? "Actual Lecture Update" : "Professor Login";
+  const professorHelp = $("#professorLoginView .panel-head span");
+  if (professorHelp) professorHelp.textContent = professorMode
+    ? "Select your scheduled lecture and submit actual time, topic, and pending portion after class."
+    : "Faculty can enter actual topic taught, time in, and time out after lecture.";
+}
+
 function showLoginGate() {
   document.body.classList.toggle("app-locked", !isLoggedIn());
   $("#loginGate")?.classList.toggle("hidden", isLoggedIn());
+  applyAccessMode();
 }
 
 function showInitialCloudPrompt() {
@@ -1290,6 +1365,8 @@ function handleLogin(event) {
 
   if (enteredId === loginId && enteredPassword === loginPassword) {
     sessionStorage.setItem(loginSessionKey, "yes");
+    sessionStorage.setItem(loginRoleKey, "owner");
+    sessionStorage.removeItem(loginProfessorKey);
     form.reset();
     if (error) error.textContent = "";
     showLoginGate();
@@ -1298,11 +1375,28 @@ function handleLogin(event) {
     return;
   }
 
+  const professor = data.professors.find((item) =>
+    professorLoginId(item).toLowerCase() === enteredId.toLowerCase() &&
+    professorPassword(item) === enteredPassword
+  );
+  if (professor) {
+    sessionStorage.setItem(loginSessionKey, "yes");
+    sessionStorage.setItem(loginRoleKey, "professor");
+    sessionStorage.setItem(loginProfessorKey, professor.id);
+    form.reset();
+    if (error) error.textContent = "";
+    showLoginGate();
+    showInitialCloudPrompt();
+    return;
+  }
+
   if (error) error.textContent = "Invalid Login ID or password.";
 }
 
 function logout() {
   sessionStorage.removeItem(loginSessionKey);
+  sessionStorage.removeItem(loginRoleKey);
+  sessionStorage.removeItem(loginProfessorKey);
   hideInitialCloudPrompt();
   showLoginGate();
 }
@@ -1559,11 +1653,14 @@ function timetableDisplayTime(slot, field) {
 }
 
 function timetableSubjectLabel(slot, batch) {
-  if (slot.noLecture) return "No Lecture";
+  if (slot.noLecture) return isChangedTT(slot) ? "No Lecture (Changed)" : "No Lecture";
   const subject = slotSubject(slot);
-  if (subject === "Strategic Financial Management") return "SFM Only Live";
-  if (subject === "Financial Accounting" && batch?.level === "Inter") return "G1 - AS";
-  return paperShort(batch?.level, subject);
+  const label = subject === "Strategic Financial Management"
+    ? "SFM Only Live"
+    : subject === "Financial Accounting" && batch?.level === "Inter"
+      ? "G1 - AS"
+      : paperShort(batch?.level, subject);
+  return isChangedTT(slot) ? `${label} (Changed)` : label;
 }
 
 function professorSlotTopicLines(slot) {
@@ -1991,7 +2088,7 @@ function renderDailyTimetable() {
       <td>${escapeHtml(batch?.centre || "")}</td>
       <td>${escapeHtml(slot.noLecture ? "-" : professorName(professorId))}</td>
       <td>${escapeHtml(slot.noLecture ? "No Lecture" : paperShort(batch?.level, slot.subject))}</td>
-      <td><span class="status ${statusClass}">${escapeHtml(status)}</span></td>
+      <td>${sourceBadge(slot)} <span class="status ${statusClass}">${escapeHtml(status)}</span></td>
     </tr>`;
   }).join("") || `<tr><td colspan="7" class="empty">No timetable entries for this date/filter.</td></tr>`;
 }
@@ -2097,14 +2194,17 @@ function renderProfessorManagement() {
         </select>
       </td>
       <td><div class="paper-chip-list">${mappedPaperChips || `<span class="muted">No papers mapped</span>`}</div></td>
+      <td><input data-professor-login-id="${escapeHtml(professor.id)}" value="${escapeHtml(professorLoginId(professor))}"></td>
+      <td><input data-professor-password="${escapeHtml(professor.id)}" value="${escapeHtml(professorPassword(professor))}"></td>
       <td class="professor-actions-cell">
         <div class="row-actions">
           <button class="tiny ghost" data-save-professor="${escapeHtml(professor.id)}" type="button">Save</button>
+          <button class="tiny ghost" data-copy-professor-login="${escapeHtml(professor.id)}" type="button">Copy Login</button>
           <button class="tiny danger" data-delete-professor="${escapeHtml(professor.id)}" type="button">Delete</button>
         </div>
       </td>
     </tr>`;
-  }).join("") || `<tr><td colspan="5" class="empty">No faculty found for this view.</td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="empty">No faculty found for this view.</td></tr>`;
 }
 
 function slotsForCurrentWeek({ applyWeeklyFilters = true } = {}) {
@@ -2128,7 +2228,8 @@ function slotLine(slot, includeBatch = false, includeProfessor = false) {
     `${formatTimeRange(slot.start, slot.end)}`,
     includeBatch ? batch?.name : "",
     subject,
-    includeProfessor ? professorName(slotProfessorId(slot)) : ""
+    includeProfessor ? professorName(slotProfessorId(slot)) : "",
+    isChangedTT(slot) ? "Changed" : ""
   ].filter(Boolean);
   return `- ${bits.join(" | ")}`;
 }
@@ -2634,7 +2735,12 @@ function dummyBadge(item) {
   return isDummy(item) ? `<span class="status blue">DUMMY</span>` : `<span class="status green">LIVE</span>`;
 }
 
+function isChangedTT(item) {
+  return item?.importSource === changedTTSource;
+}
+
 function sourceBadge(item) {
+  if (isChangedTT(item)) return `<span class="status red">Changed</span>`;
   if (item?.importSource === "whatsapp-timetable-image-export") return `<span class="status blue">WHATSAPP</span>`;
   if (String(item?.importSource || "").startsWith(googleSheetSource.importSource)) return `<span class="status blue">GOOGLE SHEET</span>`;
   return "";
@@ -3110,9 +3216,14 @@ function renderBatchAllocationInsights(rows) {
 function renderProfessorLogin() {
   if (!$("#professorLoginSelect")) return;
   const professorSelect = $("#professorLoginSelect");
+  const fixedProfessorId = loggedInProfessorId();
   const currentProfessor = professorSelect.value;
   professorSelect.innerHTML = data.professors.map((professor) => `<option value="${escapeHtml(professor.id)}">${escapeHtml(professor.name)}</option>`).join("");
+  if (fixedProfessorId && data.professors.some((professor) => professor.id === fixedProfessorId)) professorSelect.value = fixedProfessorId;
   if (data.professors.some((professor) => professor.id === currentProfessor)) professorSelect.value = currentProfessor;
+  if (fixedProfessorId && data.professors.some((professor) => professor.id === fixedProfessorId)) professorSelect.value = fixedProfessorId;
+  professorSelect.disabled = Boolean(fixedProfessorId);
+  if ($("#professorLoginWeek")) $("#professorLoginWeek").value = selectedWeekStart;
 
   const professorId = professorSelect.value;
   const slots = professorWeekSlots(professorId, selectedWeekStart);
@@ -3141,6 +3252,8 @@ function renderProfessorLogin() {
     field("timeIn", "Time In", "time", selectedSlot?.start || "07:00", "required"),
     field("timeOut", "Time Out", "time", selectedSlot?.end || "10:00", "required"),
     field("actualHours", "Actual Hrs", "number", selectedSlot ? hoursBetween(selectedSlot.start, selectedSlot.end).toFixed(1) : "0", "min=\"0\" step=\"0.5\" required"),
+    `<label><span>Lecture Status</span><select name="lectureStatus"><option value="Completed">Completed</option><option value="Partly Completed">Partly Completed</option><option value="Not Completed">Not Completed</option></select></label>`,
+    field("pendingPortion", "Pending Portion", "text", "", "placeholder=\"If anything remains, write here\""),
     `<label class="wide"><span>Remarks</span><textarea name="remarks" placeholder="Covered examples, test planned, extra practice needed..."></textarea></label>`,
     `<div class="row-actions wide"><button type="submit">Submit Actual Lecture</button></div>`
   ].join("");
@@ -3158,9 +3271,11 @@ function renderProfessorLogin() {
       <td>${escapeHtml(entry.topic)}</td>
       <td>${Number(entry.actualHours || 0).toFixed(1)}</td>
       <td>${escapeHtml(formatTimeRange(entry.timeIn || entry.start, entry.timeOut || entry.end))}</td>
+      <td>${escapeHtml(entry.lectureStatus || "Completed")}</td>
+      <td>${escapeHtml(entry.pendingPortion || "")}</td>
       <td>${escapeHtml(entry.remarks || "")}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="7" class="empty">No actual lecture submitted by this professor yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="9" class="empty">No actual lecture submitted by this professor yet.</td></tr>`;
 }
 
 function renderWeeklyInsights(dates, visibleBatches, activeTimeSlots) {
@@ -3430,13 +3545,16 @@ function loadGoogleSheetTable() {
 function googleTableToRows(table) {
   const headers = (table.cols || []).map((col) => cleanSheetText(col?.label || ""));
   const rows = (table.rows || []).map((row) =>
-    (row.c || []).map((cell) => String(cell?.f ?? cell?.v ?? ""))
+    Array.from({ length: headers.length }, (_, index) => {
+      const cell = (row.c || [])[index];
+      return String(cell?.f ?? cell?.v ?? "");
+    })
   );
   return [headers, ...rows];
 }
 
 function parseSheetDate(value) {
-  const text = cleanSheetText(value);
+  const text = cleanSheetText(value).replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b\.?/gi, "").trim();
   const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
   let match = text.match(/Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)/i);
   if (match) return formatDateInput(new Date(Number(match[1]), Number(match[2]), Number(match[3])));
@@ -3477,6 +3595,8 @@ function normalizeSheetYear(value) {
 
 function parseSheetTime(value) {
   const text = cleanSheetText(value);
+  const dateMatch = text.match(/Date\(\d{4},\s*\d{1,2},\s*\d{1,2},\s*(\d{1,2}),\s*(\d{1,2})/i);
+  if (dateMatch) return `${String(Number(dateMatch[1])).padStart(2, "0")}:${String(Number(dateMatch[2])).padStart(2, "0")}`;
   const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
   if (!match) return "";
   let hour = Number(match[1]);
@@ -3540,6 +3660,11 @@ function normalizeGoogleSubject(subjectText, batchName) {
   return cleanSheetText(subjectText);
 }
 
+function isImportableSheetBatch(batchName) {
+  const text = cleanSheetText(batchName);
+  return text.length > 2 && !/^\d+$/.test(text);
+}
+
 function googleSheetRowsToEntries(rows, range) {
   const entries = [];
   const seen = new Set();
@@ -3547,7 +3672,7 @@ function googleSheetRowsToEntries(rows, range) {
     [0, 7].forEach((offset) => {
       const date = parseSheetDate(row[offset]);
       const batchName = cleanSheetText(row[offset + 4]);
-      if (!date || !batchName || !/^CMA(F|FC|I| FINAL)/i.test(batchName)) return;
+      if (!date || !isImportableSheetBatch(batchName)) return;
       if (date < range.from || date > range.to) return;
       const fixedTime = fixSheetTimeRange(parseSheetTime(row[offset + 1]), parseSheetTime(row[offset + 2]));
       if (!fixedTime.start || !fixedTime.end) return;
@@ -3569,6 +3694,18 @@ function googleSheetRowsToEntries(rows, range) {
 
 function googleSheetAvailableDates(rows) {
   return [...new Set(rows.slice(1).flatMap((row) => [parseSheetDate(row[0]), parseSheetDate(row[7])]).filter(Boolean))].sort();
+}
+
+function googleSheetImportDiagnostics(rows, range) {
+  const dates = googleSheetAvailableDates(rows);
+  const rowsInRange = rows.slice(1).filter((row) =>
+    [parseSheetDate(row[0]), parseSheetDate(row[7])].some((date) => date >= range.from && date <= range.to)
+  ).length;
+  return {
+    rowCount: Math.max(0, rows.length - 1),
+    rowsInRange,
+    dates
+  };
 }
 
 function selectedGoogleSheetImportRange() {
@@ -3624,6 +3761,279 @@ function applyGoogleSheetEntries(entries, range) {
   });
 }
 
+function splitChangesTTLine(line) {
+  if (line.includes("|")) return line.split("|").map(cleanSheetText);
+  if (line.includes("\t")) return line.split("\t").map(cleanSheetText);
+  const csv = parseCsvRows(line);
+  if (csv[0]?.length > 1) return csv[0].map(cleanSheetText);
+  return line.split(/\s{2,}/).map(cleanSheetText);
+}
+
+function normalizePersonKey(value) {
+  return cleanSheetText(value)
+    .toLowerCase()
+    .replace(/\b(sir|miss|madam|maam|prof|professor)\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function resolveProfessorForChange(rawName) {
+  const key = normalizePersonKey(rawName);
+  if (!key) return null;
+  return data.professors.find((professor) => {
+    const professorKey = normalizePersonKey(professor.name);
+    return professorKey === key || professorKey.includes(key) || key.includes(professorKey);
+  }) || null;
+}
+
+function parseChangesTTFreeformBlock(block, index) {
+  const fields = {};
+  cleanSheetText(block)
+    .replace(/\s+(Batch|Date|Time|Timing|Subject|Paper|Professor|Faculty)\s*:/gi, "\n$1:")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const match = line.match(/^(batch|date|time|timing|subject|paper|professor|faculty)\s*[:\-]\s*(.+)$/i);
+      if (match) {
+        const key = match[1].toLowerCase();
+        fields[key === "timing" ? "time" : key === "paper" ? "subject" : key === "faculty" ? "professor" : key] = cleanSheetText(match[2]);
+      }
+    });
+  if (!fields.batch && !fields.date && !fields.time && !fields.subject && !fields.professor) return null;
+  const date = parseSheetDate(fields.date || "");
+  if (!date) return { ok: false, index, error: "Date not readable", line: cleanSheetText(block) };
+  const timeRange = parseTimeRange(fields.time || "");
+  if (!timeRange) return { ok: false, index, error: "Time not readable", line: cleanSheetText(block) };
+  if (!fields.batch) return { ok: false, index, error: "Batch missing", line: cleanSheetText(block) };
+  const noLecture = /no\s*lecture/i.test(`${fields.professor || ""} ${fields.subject || ""}`);
+  const subject = noLecture ? "No Lecture" : normalizeGoogleSubject(fields.subject || "", fields.batch);
+  return {
+    ok: true,
+    index,
+    date,
+    start: timeRange.start,
+    end: timeRange.end,
+    batchName: fields.batch,
+    professorName: noLecture ? "" : fields.professor || "",
+    subject,
+    noLecture
+  };
+}
+
+function parseChangesTTFreeform(text) {
+  const normalized = String(text || "").replace(/\r\n/g, "\n").trim();
+  if (!/\b(Batch|Date|Time|Subject|Professor)\s*:/i.test(normalized)) return [];
+  const blocks = normalized
+    .split(/\n\s*\n|(?=\bDear\s+Students\b)|(?=\bBatch\s*:)/i)
+    .map((block) => block.trim())
+    .filter((block) => /\b(Batch|Date|Time|Subject|Professor)\s*:/i.test(block));
+  return blocks.map((block, index) => parseChangesTTFreeformBlock(block, index + 1)).filter(Boolean);
+}
+
+function parseChangesTTInput(text) {
+  const freeformRows = parseChangesTTFreeform(text);
+  if (freeformRows.length) return freeformRows;
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line, index) => ({ line: cleanSheetText(line), index: index + 1 }))
+    .filter((row) => row.line)
+    .filter((row) => !/^date\s*[|,\t]/i.test(row.line))
+    .map(({ line, index }) => {
+      const parts = splitChangesTTLine(line).filter(Boolean);
+      if (parts.length < 5) return { ok: false, index, error: "Need Date | Time | Batch | Professor | Subject", line };
+      const date = parseSheetDate(parts[0]);
+      if (!date) return { ok: false, index, error: "Date not readable", line };
+      let start = "";
+      let end = "";
+      let batchName = "";
+      let professorName = "";
+      let subjectText = "";
+      const range = parseTimeRange(parts[1]);
+      if (range) {
+        start = range.start;
+        end = range.end;
+        batchName = parts[2];
+        professorName = parts[3];
+        subjectText = parts.slice(4).join(" | ");
+      } else if (parts.length >= 6) {
+        const fixedTime = fixSheetTimeRange(parseSheetTime(parts[1]), parseSheetTime(parts[2]));
+        start = fixedTime.start;
+        end = fixedTime.end;
+        batchName = parts[3];
+        professorName = parts[4];
+        subjectText = parts.slice(5).join(" | ");
+      }
+      if (!start || !end || hoursBetween(start, end) <= 0) return { ok: false, index, error: "Time not readable", line };
+      if (!batchName) return { ok: false, index, error: "Batch missing", line };
+      const noLecture = /no\s*lecture/i.test(`${professorName} ${subjectText}`);
+      const subject = noLecture ? "No Lecture" : normalizeGoogleSubject(subjectText, batchName);
+      return {
+        ok: true,
+        index,
+        date,
+        start,
+        end,
+        batchName,
+        professorName: noLecture ? "" : professorName,
+        subject,
+        noLecture
+      };
+    });
+}
+
+function ensureChangesTTBatch(rawBatchName, subject) {
+  const rawName = cleanSheetText(rawBatchName);
+  const importedName = importedBatchName(rawName);
+  const existing = data.batches.find((batch) =>
+    batch.id === slug(importedName) ||
+    batch.name.toLowerCase() === rawName.toLowerCase() ||
+    batch.name.toLowerCase() === importedName.toLowerCase()
+  );
+  if (existing) return existing;
+  const batchMeta = importedBatchMeta(rawName, subject === "No Lecture" ? "" : subject);
+  const levelPalette = paletteForLevel(batchMeta.level);
+  const batch = {
+    ...batchMeta,
+    color: levelPalette[data.batches.filter((item) => item.level === batchMeta.level).length % levelPalette.length]
+  };
+  data.batches.push(batch);
+  return batch;
+}
+
+function upsertChangesTTSlot(entry) {
+  const batch = ensureChangesTTBatch(entry.batchName, entry.subject);
+  const professor = entry.noLecture ? null : resolveProfessorForChange(entry.professorName) || ensureImportedProfessor({
+    name: entry.professorName || "Unassigned",
+    levels: [batch.level],
+    papers: entry.subject === "No Lecture" ? [] : [entry.subject]
+  });
+  const existing = data.slots.find((slot) =>
+    slot.batchId === batch.id &&
+    slot.date === entry.date &&
+    slot.start === entry.start &&
+    slot.end === entry.end
+  ) || (() => {
+    const sameDaySlots = data.slots.filter((slot) => slot.batchId === batch.id && slot.date === entry.date);
+    return sameDaySlots.length === 1 ? sameDaySlots[0] : null;
+  })();
+  const next = {
+    batchId: batch.id,
+    date: entry.date,
+    start: entry.start,
+    end: entry.end,
+    professorId: professor?.id || "",
+    subject: entry.subject,
+    noLecture: Boolean(entry.noLecture),
+    importSource: changedTTSource,
+    changedAt: new Date().toISOString()
+  };
+  if (existing) Object.assign(existing, next);
+  else data.slots.push({ id: uid("chg"), ...next });
+  const dateSlots = timeSlotsForDate(entry.date);
+  if (!dateSlots.some((slot) => slot.start === entry.start && slot.end === entry.end)) {
+    setTimeSlotsForDate(entry.date, [...dateSlots, { start: entry.start, end: entry.end }]);
+  }
+}
+
+function changesTTPreviewBatch(entry) {
+  const rawName = cleanSheetText(entry.batchName);
+  const importedName = importedBatchName(rawName);
+  return data.batches.find((batch) =>
+    batch.id === slug(importedName) ||
+    batch.name.toLowerCase() === rawName.toLowerCase() ||
+    batch.name.toLowerCase() === importedName.toLowerCase()
+  ) || importedBatchMeta(rawName, entry.subject === "No Lecture" ? "" : entry.subject);
+}
+
+function renderChangesTTBatchPreview(validRows) {
+  if (!validRows.length) return "";
+  const proposedSlots = validRows.map((entry) => {
+    const batch = changesTTPreviewBatch(entry);
+    return {
+      id: `preview-${entry.index}`,
+      batchId: batch.id,
+      date: entry.date,
+      start: entry.start,
+      end: entry.end,
+      professorName: entry.professorName,
+      subject: entry.subject,
+      noLecture: entry.noLecture,
+      importSource: changedTTSource
+    };
+  });
+  const batchMap = new Map(validRows.map((entry) => {
+    const batch = changesTTPreviewBatch(entry);
+    return [batch.id, batch];
+  }));
+  const dates = validRows.map((row) => row.date).sort();
+  const from = dates[0];
+  const to = dates[dates.length - 1];
+  return `<div class="changes-tt-batch-preview">
+    ${Array.from(batchMap.values()).map((batch) => {
+      const proposedKeys = new Set(proposedSlots
+        .filter((slot) => slot.batchId === batch.id)
+        .map((slot) => `${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`));
+      const existing = data.slots
+        .filter((slot) => slot.batchId === batch.id && slot.date >= from && slot.date <= to)
+        .filter((slot) => !proposedKeys.has(`${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`));
+      const rows = [...existing, ...proposedSlots.filter((slot) => slot.batchId === batch.id)]
+        .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+      return `<article>
+        <h3>${escapeHtml(batch.name)} revised timetable</h3>
+        <table>
+          <thead><tr><th>Date</th><th>Time</th><th>Professor</th><th>Subject</th><th>Tag</th></tr></thead>
+          <tbody>${rows.map((slot) => {
+            const professor = slot.noLecture ? "-" : slot.professorName || professorName(slotProfessorId(slot));
+            const subject = slot.noLecture ? "No Lecture" : paperShort(batch.level, slot.subject);
+            return `<tr>
+              <td>${escapeHtml(dayLabel(slot.date))}</td>
+              <td>${escapeHtml(formatTimeRange(slot.start, slot.end))}</td>
+              <td>${escapeHtml(professor)}</td>
+              <td>${escapeHtml(subject)}</td>
+              <td>${sourceBadge(slot) || `<span class="status green">Existing</span>`}</td>
+            </tr>`;
+          }).join("") || `<tr><td colspan="5" class="empty">No timetable rows for this batch in selected change dates.</td></tr>`}</tbody>
+        </table>
+      </article>`;
+    }).join("")}
+  </div>`;
+}
+
+function renderChangesTTPreview() {
+  const input = $("#changesTTInput");
+  const preview = $("#changesTTPreview");
+  if (!input || !preview) return;
+  const rows = parseChangesTTInput(input.value);
+  if (!input.value.trim()) {
+    preview.textContent = "Paste timetable changes here, then apply.";
+    return;
+  }
+  const good = rows.filter((row) => row.ok);
+  const bad = rows.filter((row) => !row.ok);
+  preview.innerHTML = [
+    `${good.length} valid change${good.length === 1 ? "" : "s"} ready. ${bad.length ? `${bad.length} row${bad.length === 1 ? "" : "s"} need correction.` : ""}`,
+    ...good.slice(0, 12).map((row) => `Line ${row.index}: ${row.date} | ${formatTimeRange(row.start, row.end)} | ${escapeHtml(row.batchName)} | ${escapeHtml(row.professorName || "No Lecture")} | <span class="changed-tag">Changed</span>`),
+    ...bad.map((row) => `Line ${row.index}: ${escapeHtml(row.error)} - ${escapeHtml(row.line)}`),
+    renderChangesTTBatchPreview(good)
+  ].join("<br>");
+}
+
+function applyChangesTT() {
+  const input = $("#changesTTInput");
+  const rows = parseChangesTTInput(input?.value || "");
+  const valid = rows.filter((row) => row.ok);
+  const invalid = rows.filter((row) => !row.ok);
+  if (!valid.length) {
+    alert("No valid timetable changes found. Use: Date | Time | Batch | Professor | Subject.");
+    renderChangesTTPreview();
+    return;
+  }
+  valid.forEach(upsertChangesTTSlot);
+  saveData();
+  renderChangesTTPreview();
+  alert(`Applied ${valid.length} Changed TT row${valid.length === 1 ? "" : "s"}.${invalid.length ? ` ${invalid.length} row${invalid.length === 1 ? "" : "s"} were skipped.` : ""}`);
+}
+
 async function importGoogleSheetTimetable() {
   const button = $("#importGoogleSheetBtn");
   const previousText = button?.textContent;
@@ -3643,9 +4053,9 @@ async function importGoogleSheetTimetable() {
     const rows = googleTableToRows(table);
     const entries = googleSheetRowsToEntries(rows, range);
     if (!entries.length) {
-      const availableDates = googleSheetAvailableDates(rows);
-      const availableText = availableDates.length
-        ? ` Available dates in sheet: ${availableDates.slice(0, 12).join(", ")}${availableDates.length > 12 ? "..." : ""}.`
+      const diagnostics = googleSheetImportDiagnostics(rows, range);
+      const availableText = diagnostics.dates.length
+        ? ` Available dates in sheet: ${diagnostics.dates.slice(0, 12).join(", ")}${diagnostics.dates.length > 12 ? "..." : ""}. Rows read: ${diagnostics.rowCount}. Rows in selected week: ${diagnostics.rowsInRange}.`
         : " No valid timetable dates were readable from the sheet.";
       throw new Error(`No timetable rows found for ${range.from} to ${range.to}.${availableText}`);
     }
@@ -4064,6 +4474,14 @@ function saveActualLecture(event) {
     return;
   }
   const professorId = $("#professorLoginSelect").value;
+  if (isProfessorMode() && professorId !== loggedInProfessorId()) {
+    alert("This login can submit only its own lecture details.");
+    return;
+  }
+  if (isProfessorMode() && slotProfessorId(slot) !== loggedInProfessorId()) {
+    alert("This lecture does not belong to your professor login.");
+    return;
+  }
   const topicPlanId = form.elements.topicPlanId.value;
   const topicPlan = data.topicPlans.find((plan) => plan.id === topicPlanId);
   const topic = form.elements.topic.value.trim() || (topicPlan ? plannedTopicText(topicPlan) : "");
@@ -4081,19 +4499,31 @@ function saveActualLecture(event) {
     timeIn: form.elements.timeIn.value,
     timeOut: form.elements.timeOut.value,
     actualHours,
+    lectureStatus: form.elements.lectureStatus.value,
+    pendingPortion: form.elements.pendingPortion.value.trim(),
     remarks: form.elements.remarks.value.trim()
   };
-  data.actualLectures.push(record);
-  data.progress.push({
+  const existingActual = data.actualLectures.find((entry) => entry.slotId === slot.id && entry.professorId === professorId);
+  if (existingActual) {
+    record.id = existingActual.id;
+    Object.assign(existingActual, record);
+  }
+  else data.actualLectures.push(record);
+  const progressPayload = {
     id: uid("pr"),
+    actualLectureId: record.id,
     batchId: record.batchId,
     professorId,
     date: record.date,
     topic: record.topic,
     hours: actualHours,
-    remarks: `Actual entry: ${record.timeIn} to ${record.timeOut}${record.remarks ? ` | ${record.remarks}` : ""}`
-  });
+    remarks: `Actual entry: ${record.timeIn} to ${record.timeOut} | ${record.lectureStatus}${record.pendingPortion ? ` | Pending: ${record.pendingPortion}` : ""}${record.remarks ? ` | ${record.remarks}` : ""}`
+  };
+  const existingProgress = data.progress.find((entry) => entry.actualLectureId === record.id);
+  if (existingProgress) Object.assign(existingProgress, { ...progressPayload, id: existingProgress.id });
+  else data.progress.push(progressPayload);
   saveData();
+  if (isProfessorMode() && cloudSyncUrl()) saveCloudData();
 }
 
 function saveProfessorManagement(professorId) {
@@ -4102,9 +4532,13 @@ function saveProfessorManagement(professorId) {
   const nameInput = $(`[data-professor-name="${CSS.escape(professorId)}"]`);
   const levelSelect = $(`[data-professor-levels="${CSS.escape(professorId)}"]`);
   const paperNoSelect = $(`[data-professor-paper-nos="${CSS.escape(professorId)}"]`);
+  const loginInput = $(`[data-professor-login-id="${CSS.escape(professorId)}"]`);
+  const passwordInput = $(`[data-professor-password="${CSS.escape(professorId)}"]`);
   const selectedLevels = selectedValues(levelSelect);
   const selectedPaperNos = selectedValues(paperNoSelect).map((paperNo) => Number(paperNo.replace("P", "")));
   professor.name = nameInput.value.trim() || professor.name;
+  professor.loginId = loginInput.value.trim() || professorLoginId(professor);
+  professor.loginPassword = passwordInput.value.trim() || professorPassword(professor);
   professor.levels = selectedLevels.length ? selectedLevels : Object.keys(cmaPapers);
   professor.papers = papersFromLevelsAndNos(professor.levels, selectedPaperNos);
   if (!professor.papers.length) {
@@ -4126,12 +4560,14 @@ function addProfessorFromManagement(event) {
     papers = allPapers().filter((paper) => levels.some((level) => papersForLevel(level).includes(paper)));
   }
   data.professors.push({
-    id: uid("p"),
+    id: slug(name) || uid("p"),
     name,
     speciality: selectedPaperNos.length ? `Papers ${selectedPaperNos.join(", ")}` : "New professor",
     home: "Online",
     levels,
     papers,
+    loginId: slug(name) || uid("login"),
+    loginPassword: `cma${String(slug(name) || Date.now()).slice(0, 4)}`,
     color: professorPalette[data.professors.length % professorPalette.length]
   });
   form.reset();
@@ -4239,6 +4675,10 @@ function bindEvents() {
   });
   $("#professorHoursFrom").addEventListener("change", renderProfessorActualBatchHours);
   $("#professorHoursTo").addEventListener("change", renderProfessorActualBatchHours);
+  $("#professorLoginWeek")?.addEventListener("change", (event) => {
+    selectedWeekStart = formatDateInput(getFriday(new Date(`${event.target.value}T00:00:00`)));
+    renderProfessorLogin();
+  });
   $("#professorLoginSelect").addEventListener("change", renderProfessorLogin);
   $("#professorActualForm").addEventListener("change", (event) => {
     if (event.target.name === "slotId") renderProfessorLogin();
@@ -4279,6 +4719,12 @@ function bindEvents() {
   });
   $("#weeklyColumnSize").addEventListener("change", saveData);
   $("#importGoogleSheetBtn").addEventListener("click", importGoogleSheetTimetable);
+  $("#changesTTInput")?.addEventListener("input", renderChangesTTPreview);
+  $("#applyChangesTTBtn")?.addEventListener("click", applyChangesTT);
+  $("#clearChangesTTBtn")?.addEventListener("click", () => {
+    $("#changesTTInput").value = "";
+    renderChangesTTPreview();
+  });
   $("#weekStart").addEventListener("change", (event) => {
     selectedWeekStart = formatDateInput(getFriday(new Date(`${event.target.value}T00:00:00`)));
     if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
@@ -4313,6 +4759,7 @@ function bindEvents() {
     const deleteTopicPlanId = event.target.dataset.deleteTopicPlan;
     const saveProfessorId = event.target.dataset.saveProfessor;
     const deleteProfessorId = event.target.dataset.deleteProfessor;
+    const copyProfessorLoginId = event.target.dataset.copyProfessorLogin;
     const professorView = event.target.dataset.professorView;
     if (professorView) {
       professorManagementView = professorView;
@@ -4325,6 +4772,14 @@ function bindEvents() {
     }
     if (deleteProfessorId) {
       deleteProfessor(deleteProfessorId);
+      return;
+    }
+    if (copyProfessorLoginId) {
+      const professor = data.professors.find((item) => item.id === copyProfessorLoginId);
+      if (professor) {
+        navigator.clipboard?.writeText(professorLoginShareMessage(professor));
+        alert(`Login message copied for ${professor.name}.`);
+      }
       return;
     }
     if (deleteTopicPlanId) {
@@ -4434,6 +4889,7 @@ function render() {
   safeRenderStep("Share panels", renderSharePanels);
   safeRenderStep("Professor planning", renderProfessorPlanning);
   safeRenderStep("Professor login", renderProfessorLogin);
+  safeRenderStep("Access mode", applyAccessMode);
 }
 
 try {

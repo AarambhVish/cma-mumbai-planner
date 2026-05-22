@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260522-changes-preview">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -56,6 +56,7 @@
       <nav class="tabs" aria-label="Views">
         <button class="tab active" data-view="dashboard">Dashboard</button>
         <button class="tab" data-view="weekly">Weekly Table</button>
+        <button class="tab" data-view="changesTT">Changes TT</button>
         <button class="tab" data-view="planner">Timetable</button>
         <button class="tab" data-view="professorPlanning">Professor Planning</button>
         <button class="tab" data-view="professorLogin">Professor Login</button>
@@ -167,6 +168,33 @@
               <tbody id="weeklyTable"></tbody>
             </table>
           </div>
+        </section>
+      </section>
+
+      <section class="view" id="changesTTView">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Changes TT</h2>
+              <span>Paste single or multiple timetable changes. Applied rows will be tagged as Changed.</span>
+            </div>
+            <div class="row-actions">
+              <button class="ghost" id="clearChangesTTBtn" type="button">Clear</button>
+              <button id="applyChangesTTBtn" type="button">Apply to Timetable</button>
+            </div>
+          </div>
+          <textarea id="changesTTInput" class="changes-tt-box" spellcheck="false" placeholder="Paste WhatsApp-style change messages or one change per line:
+Dear Students,
+Please note the change in Tomorrow's lecture:
+Batch : CMAI D26 MULUND
+Date : 21 May, 2026 Thursday
+Time : 01:00 PM to 08:00 PM
+Subject : G1 Costing
+Professor : Sandesh Sir
+
+15-May-2026 | 7am-10am | CMAF_J26_MULUND | Pradeep Sir | Accounts
+16-May-2026 | 12:00-20:00 | CMAI_D26_G1_CHM | No Lecture | No Lecture"></textarea>
+          <div class="changes-tt-preview" id="changesTTPreview">Paste timetable changes here, then apply.</div>
         </section>
       </section>
 
@@ -487,6 +515,10 @@
               Professor
               <select id="professorLoginSelect"></select>
             </label>
+            <label>
+              Week Starting
+              <input id="professorLoginWeek" type="date">
+            </label>
           </div>
           <form id="professorActualForm" class="form-grid"></form>
         </section>
@@ -505,6 +537,8 @@
                   <th>Topic</th>
                   <th>Actual Hrs</th>
                   <th>Time In-Out</th>
+                  <th>Status</th>
+                  <th>Pending Portion</th>
                   <th>Remarks</th>
                 </tr>
               </thead>
@@ -584,6 +618,8 @@
                   <th>Levels</th>
                   <th>Paper Nos.</th>
                   <th>Mapped Papers</th>
+                  <th>Login ID</th>
+                  <th>Password</th>
                   <th></th>
                 </tr>
               </thead>
@@ -601,6 +637,6 @@
       </label>
     </template>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=20260522-freeform-changes"></script>
   </body>
 </html>
