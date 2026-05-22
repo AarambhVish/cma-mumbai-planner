@@ -3437,14 +3437,42 @@ function googleTableToRows(table) {
 
 function parseSheetDate(value) {
   const text = cleanSheetText(value);
-  const match = text.match(/(\d{1,2})-([A-Za-z]{3,})-(\d{4})/);
-  if (!match) return "";
   const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-  const day = Number(match[1]);
-  const month = months[match[2].slice(0, 3).toLowerCase()];
-  const year = Number(match[3]);
-  if (month === undefined) return "";
-  return formatDateInput(new Date(year, month, day));
+  let match = text.match(/Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)/i);
+  if (match) return formatDateInput(new Date(Number(match[1]), Number(match[2]), Number(match[3])));
+
+  match = text.match(/(\d{1,2})[-\s/]([A-Za-z]{3,})[-\s,/]?(\d{2,4})/);
+  if (match) {
+    const day = Number(match[1]);
+    const month = months[match[2].slice(0, 3).toLowerCase()];
+    const year = normalizeSheetYear(match[3]);
+    if (month !== undefined) return formatDateInput(new Date(year, month, day));
+  }
+
+  match = text.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+  if (match) {
+    const day = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const year = normalizeSheetYear(match[3]);
+    if (month >= 0 && month <= 11) return formatDateInput(new Date(year, month, day));
+  }
+
+  if (/^\d+(\.\d+)?$/.test(text)) {
+    const serial = Number(text);
+    if (serial > 20000) {
+      const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+      return formatDateInput(new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    }
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return formatDateInput(parsed);
+  return "";
+}
+
+function normalizeSheetYear(value) {
+  const year = Number(value);
+  return year < 100 ? 2000 + year : year;
 }
 
 function parseSheetTime(value) {
@@ -3539,6 +3567,10 @@ function googleSheetRowsToEntries(rows, range) {
   return entries;
 }
 
+function googleSheetAvailableDates(rows) {
+  return [...new Set(rows.slice(1).flatMap((row) => [parseSheetDate(row[0]), parseSheetDate(row[7])]).filter(Boolean))].sort();
+}
+
 function selectedGoogleSheetImportRange() {
   const from = selectedWeekStart;
   return { from, to: addDays(from, 6) };
@@ -3608,8 +3640,15 @@ async function importGoogleSheetTimetable() {
     }
     const range = selectedGoogleSheetImportRange();
     const table = await loadGoogleSheetTable();
-    const entries = googleSheetRowsToEntries(googleTableToRows(table), range);
-    if (!entries.length) throw new Error(`No timetable rows found for ${range.from} to ${range.to}.`);
+    const rows = googleTableToRows(table);
+    const entries = googleSheetRowsToEntries(rows, range);
+    if (!entries.length) {
+      const availableDates = googleSheetAvailableDates(rows);
+      const availableText = availableDates.length
+        ? ` Available dates in sheet: ${availableDates.slice(0, 12).join(", ")}${availableDates.length > 12 ? "..." : ""}.`
+        : " No valid timetable dates were readable from the sheet.";
+      throw new Error(`No timetable rows found for ${range.from} to ${range.to}.${availableText}`);
+    }
     applyGoogleSheetEntries(entries, range);
     saveData();
     alert(`Imported ${entries.length} Google Sheet timetable rows for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced.`);
