@@ -6,7 +6,35 @@
     <title>CMA Mumbai Planner</title>
     <link rel="stylesheet" href="styles.css">
   </head>
-  <body>
+  <body class="app-locked">
+    <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
+      <form class="login-card" id="loginForm">
+        <h2>CMA Mumbai Planner</h2>
+        <p>Login required before using timetable and planner data.</p>
+        <label>
+          <span>Login ID</span>
+          <input name="loginId" type="text" autocomplete="username" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <div class="login-error" id="loginError" role="alert"></div>
+        <button type="submit">Login</button>
+      </form>
+    </section>
+
+    <section class="cloud-start hidden" id="cloudStartPrompt" aria-label="Load latest cloud data">
+      <div class="cloud-start-card">
+        <h2>Load Latest Data</h2>
+        <p>Press Cloud Load now so this device starts with the latest saved timetable data.</p>
+        <div class="row-actions">
+          <button class="ghost" id="skipInitialCloudLoad" type="button">Skip</button>
+          <button id="initialCloudLoadBtn" type="button">Cloud Load</button>
+        </div>
+      </div>
+    </section>
+
     <header class="topbar">
       <div>
         <h1>CMA Mumbai Planner</h1>
@@ -20,6 +48,7 @@
         </label>
         <button class="ghost" id="cloudLoadBtn" title="Load planner data from Google">Cloud Load</button>
         <button id="cloudSaveBtn" title="Save planner data to Google">Cloud Save</button>
+        <button class="ghost" id="logoutBtn" title="Lock software">Logout</button>
       </div>
     </header>
 

@@ -1249,6 +1249,64 @@ function saveData() {
   render();
 }
 
+const loginSessionKey = "cma-planner-login-ok";
+const loginId = "CMATT";
+const loginPassword = "cma";
+let cloudSaveReminderId = null;
+
+function isLoggedIn() {
+  return sessionStorage.getItem(loginSessionKey) === "yes";
+}
+
+function showLoginGate() {
+  document.body.classList.toggle("app-locked", !isLoggedIn());
+  $("#loginGate")?.classList.toggle("hidden", isLoggedIn());
+}
+
+function showInitialCloudPrompt() {
+  $("#cloudStartPrompt")?.classList.remove("hidden");
+}
+
+function hideInitialCloudPrompt() {
+  $("#cloudStartPrompt")?.classList.add("hidden");
+}
+
+function startCloudSaveReminder() {
+  if (cloudSaveReminderId) clearInterval(cloudSaveReminderId);
+  cloudSaveReminderId = setInterval(() => {
+    if (!isLoggedIn()) return;
+    if (confirm("Reminder: save latest CMA planner data to cloud now?")) {
+      saveCloudData();
+    }
+  }, 15 * 60 * 1000);
+}
+
+function handleLogin(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const enteredId = form.elements.loginId.value.trim();
+  const enteredPassword = form.elements.password.value;
+  const error = $("#loginError");
+
+  if (enteredId === loginId && enteredPassword === loginPassword) {
+    sessionStorage.setItem(loginSessionKey, "yes");
+    form.reset();
+    if (error) error.textContent = "";
+    showLoginGate();
+    showInitialCloudPrompt();
+    startCloudSaveReminder();
+    return;
+  }
+
+  if (error) error.textContent = "Invalid Login ID or password.";
+}
+
+function logout() {
+  sessionStorage.removeItem(loginSessionKey);
+  hideInitialCloudPrompt();
+  showLoginGate();
+}
+
 function cloudSyncUrl() {
   return String(data.settings.googleWebAppUrl || "").trim().replace(/\/dev(\?|$)/, "/exec$1");
 }
@@ -4098,6 +4156,13 @@ function bindEvents() {
   if ($("#progressForm")) $("#progressForm").addEventListener("submit", addProgress);
   $("#batchForm").addEventListener("submit", addBatch);
   $("#masterForm").addEventListener("submit", addMaster);
+  $("#loginForm").addEventListener("submit", handleLogin);
+  $("#logoutBtn").addEventListener("click", logout);
+  $("#initialCloudLoadBtn").addEventListener("click", () => {
+    hideInitialCloudPrompt();
+    loadCloudData();
+  });
+  $("#skipInitialCloudLoad").addEventListener("click", hideInitialCloudPrompt);
   $("#cloudLoadBtn").addEventListener("click", loadCloudData);
   $("#cloudSaveBtn").addEventListener("click", saveCloudData);
   $("#professorManagementForm").addEventListener("submit", addProfessorFromManagement);
@@ -4338,3 +4403,5 @@ try {
   console.error("Event binding failed", error);
 }
 render();
+showLoginGate();
+if (isLoggedIn()) startCloudSaveReminder();
