@@ -10,7 +10,17 @@
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
       <form class="login-card" id="loginForm">
         <h2>CMA Mumbai Planner</h2>
-        <p>Login required before using timetable and planner data.</p>
+        <p id="loginHelp">Choose Admin for full planner access or Professor for actual lecture updates only.</p>
+        <div class="login-role-toggle" role="group" aria-label="Login type">
+          <label>
+            <input type="radio" name="loginRole" value="owner" checked>
+            <span>Admin Login</span>
+          </label>
+          <label>
+            <input type="radio" name="loginRole" value="professor">
+            <span>Professor Login</span>
+          </label>
+        </div>
         <label>
           <span>Login ID</span>
           <input name="loginId" type="text" autocomplete="username" required>
@@ -540,6 +550,7 @@ Professor : Sandesh Sir
                   <th>Status</th>
                   <th>Pending Portion</th>
                   <th>Remarks</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="professorActualTable"></tbody>

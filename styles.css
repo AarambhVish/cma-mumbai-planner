@@ -209,6 +209,45 @@ input[type="file"] {
   margin: 8px 0 18px;
 }
 
+.login-role-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 4px;
+  background: #eef5f8;
+  border: 1px solid #c7d8df;
+  border-radius: 8px;
+}
+
+.login-role-toggle label {
+  margin: 0;
+  display: block;
+}
+
+.login-role-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.login-role-toggle span {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--brand-dark);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.login-role-toggle input:checked + span {
+  background: var(--brand);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 93, 104, 0.22);
+}
+
 .login-card label {
   display: grid;
   gap: 7px;
@@ -427,7 +466,7 @@ textarea {
 }
 
 #weeklyInsights {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -470,6 +509,33 @@ textarea {
 
 #weeklyInsights .insight-card small {
   font-size: 11px;
+}
+
+.clickable-insight {
+  cursor: pointer;
+}
+
+.clickable-insight:hover {
+  border-color: var(--brand);
+  background: #f7fcfd;
+}
+
+.weekly-conflict-details {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.weekly-conflict-details > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--brand-dark);
+}
+
+.mini-table-wrap {
+  max-height: 260px;
 }
 
 #weeklyView .table-wrap {
@@ -950,6 +1016,19 @@ tr:last-child td {
   font-size: 15px;
 }
 
+.changes-tt-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+.changes-tt-preview-grid h4 {
+  margin: 0 0 6px;
+  color: var(--brand-dark);
+  font-size: 13px;
+}
+
 .changes-tt-batch-preview table {
   min-width: 0;
   font-size: 13px;
@@ -962,6 +1041,18 @@ tr:last-child td {
 
 .dummy-row td {
   background: #f7fbff;
+}
+
+.actual-record-row {
+  cursor: pointer;
+}
+
+.actual-record-row:hover td {
+  background: #eef8fb !important;
+}
+
+.actual-record-row.editing-row td {
+  background: #fff4d8 !important;
 }
 
 .meter {

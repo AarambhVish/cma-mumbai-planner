@@ -971,7 +971,8 @@ function ensureDataShape() {
       ...slot,
       batchId: nextBatchId,
       professorId: professorIdMigration[slot.professorId] || slot.professorId || "",
-      subject: subjectMigration[slot.subject] || slot.subject || batch?.paper || ""
+      subject: subjectMigration[slot.subject] || slot.subject || batch?.paper || "",
+      approvedConflicts: Array.isArray(slot.approvedConflicts) ? slot.approvedConflicts : []
     };
   }).filter((slot) => data.batches.some((batch) => batch.id === slot.batchId));
   data.progress = data.progress.map((entry) => ({
@@ -1258,6 +1259,7 @@ const loginProfessorKey = "cma-planner-login-professor";
 const loginId = "CMATT";
 const loginPassword = "cma";
 let cloudSaveReminderId = null;
+let editingActualLectureId = "";
 
 function isLoggedIn() {
   return sessionStorage.getItem(loginSessionKey) === "yes";
@@ -1361,9 +1363,10 @@ function handleLogin(event) {
   const form = event.currentTarget;
   const enteredId = form.elements.loginId.value.trim();
   const enteredPassword = form.elements.password.value;
+  const selectedRole = form.elements.loginRole.value;
   const error = $("#loginError");
 
-  if (enteredId === loginId && enteredPassword === loginPassword) {
+  if (selectedRole === "owner" && enteredId === loginId && enteredPassword === loginPassword) {
     sessionStorage.setItem(loginSessionKey, "yes");
     sessionStorage.setItem(loginRoleKey, "owner");
     sessionStorage.removeItem(loginProfessorKey);
@@ -1375,22 +1378,27 @@ function handleLogin(event) {
     return;
   }
 
-  const professor = data.professors.find((item) =>
-    professorLoginId(item).toLowerCase() === enteredId.toLowerCase() &&
-    professorPassword(item) === enteredPassword
-  );
-  if (professor) {
-    sessionStorage.setItem(loginSessionKey, "yes");
-    sessionStorage.setItem(loginRoleKey, "professor");
-    sessionStorage.setItem(loginProfessorKey, professor.id);
-    form.reset();
-    if (error) error.textContent = "";
-    showLoginGate();
-    showInitialCloudPrompt();
-    return;
+  if (selectedRole === "professor") {
+    const professor = data.professors.find((item) =>
+      professorLoginId(item).toLowerCase() === enteredId.toLowerCase() &&
+      professorPassword(item) === enteredPassword
+    );
+    if (professor) {
+      sessionStorage.setItem(loginSessionKey, "yes");
+      sessionStorage.setItem(loginRoleKey, "professor");
+      sessionStorage.setItem(loginProfessorKey, professor.id);
+      form.reset();
+      form.elements.loginRole.value = "professor";
+      if (error) error.textContent = "";
+      showLoginGate();
+      showInitialCloudPrompt();
+      return;
+    }
   }
 
-  if (error) error.textContent = "Invalid Login ID or password.";
+  if (error) error.textContent = selectedRole === "owner"
+    ? "Invalid Admin Login ID or password."
+    : "Invalid Professor Login ID or password.";
 }
 
 function logout() {
@@ -1462,7 +1470,8 @@ function loadCloudData() {
   }, 12000);
 }
 
-function saveCloudData() {
+function saveCloudData(options = {}) {
+  const silent = Boolean(options.silent);
   const url = requireCloudSyncUrl();
   if (!url) return;
 
@@ -1488,7 +1497,7 @@ function saveCloudData() {
   setTimeout(() => {
     iframe.remove();
     form.remove();
-    alert("Planner data save request sent to Google cloud.");
+    if (!silent) alert("Planner data save request sent to Google cloud.");
   }, 1200);
 }
 
@@ -1680,6 +1689,19 @@ function professorSlotTopicLines(slot) {
       return `${topic.chapterName}${hours ? ` (${hours.toFixed(1)} hrs)` : ""}`;
     })
     .filter(Boolean);
+}
+
+function actualHoursFromForm(form) {
+  const timeIn = form?.elements?.timeIn?.value || "";
+  const timeOut = form?.elements?.timeOut?.value || "";
+  const breakMinutes = Math.max(0, Number(form?.elements?.breakMinutes?.value || 0));
+  if (!timeIn || !timeOut) return 0;
+  return Math.max(0, hoursBetween(timeIn, timeOut) - (breakMinutes / 60));
+}
+
+function updateActualHoursField(form) {
+  if (!form?.elements?.actualHours) return;
+  form.elements.actualHours.value = actualHoursFromForm(form).toFixed(2);
 }
 
 function parseTimePart(value) {
@@ -1924,6 +1946,25 @@ function slotsOverlap(a, b) {
   return a.date === b.date && minutes(a.start) < minutes(b.end) && minutes(b.start) < minutes(a.end);
 }
 
+function conflictPairKey(a, b) {
+  return [a?.id || "", b?.id || ""].sort().join("|");
+}
+
+function conflictIsApproved(a, b) {
+  const key = conflictPairKey(a, b);
+  return Boolean(key && (a?.approvedConflicts || []).includes(key) && (b?.approvedConflicts || []).includes(key));
+}
+
+function overlappingProfessorSlots(slot) {
+  const professorId = slotProfessorId(slot);
+  if (!professorId) return [];
+  return data.slots.filter((other) =>
+    other.id !== slot.id &&
+    slotProfessorId(other) === professorId &&
+    slotsOverlap(slot, other)
+  );
+}
+
 function travelGapRequired(from, to) {
   if (from === to || from === "Online" || to === "Online") return 30;
   return 90;
@@ -1943,7 +1984,7 @@ function conflictAlerts(candidate) {
       const firstProfessorId = slotProfessorId(first);
       const secondProfessorId = slotProfessorId(second);
 
-      if (firstProfessorId && firstProfessorId === secondProfessorId && slotsOverlap(first, second)) {
+      if (firstProfessorId && firstProfessorId === secondProfessorId && slotsOverlap(first, second) && !conflictIsApproved(first, second)) {
         alerts.push({ tone: "red", title: "Faculty double-booked", body: `${professorName(firstProfessorId)} has overlapping classes for ${a.name} and ${b.name} on ${first.date}.` });
       }
 
@@ -1964,11 +2005,11 @@ function slotHasProfessorConflict(slot) {
   const batch = batchById(slot.batchId);
   const professorId = slotProfessorId(slot);
   if (!batch || !professorId) return false;
-  return data.slots.some((other) => {
+  return overlappingProfessorSlots(slot).some((other) => {
     if (other.id === slot.id) return false;
     const otherBatch = batchById(other.batchId);
     if (!otherBatch) return false;
-    return slotProfessorId(other) === professorId && slotsOverlap(slot, other);
+    return !conflictIsApproved(slot, other);
   });
 }
 
@@ -3227,7 +3268,8 @@ function renderProfessorLogin() {
 
   const professorId = professorSelect.value;
   const slots = professorWeekSlots(professorId, selectedWeekStart);
-  const currentSlotId = $("#professorActualForm")?.elements?.slotId?.value || slots[0]?.id || "";
+  const editingActual = data.actualLectures.find((entry) => entry.id === editingActualLectureId && entry.professorId === professorId);
+  const currentSlotId = editingActual?.slotId || $("#professorActualForm")?.elements?.slotId?.value || slots[0]?.id || "";
   const selectedSlot = slots.find((slot) => slot.id === currentSlotId) || slots[0];
   const selectedSlotPaperNo = selectedSlot ? paperNumbers[slotSubject(selectedSlot)] : null;
   const allocationPlans = data.topicPlans.filter((plan) =>
@@ -3235,7 +3277,7 @@ function renderProfessorLogin() {
     (!selectedSlot || plan.batchId === selectedSlot.batchId) &&
     (!selectedSlotPaperNo || paperForPlan(plan) === selectedSlotPaperNo)
   );
-  const currentTopicPlanId = $("#professorActualForm")?.elements?.topicPlanId?.value || "";
+  const currentTopicPlanId = editingActual?.topicPlanId || $("#professorActualForm")?.elements?.topicPlanId?.value || "";
   const selectedPlan = allocationPlans.find((plan) => plan.id === currentTopicPlanId) || allocationPlans[0];
   const planOptions = [
     { value: "", label: allocationPlans.length ? "Select allocated topic" : "No allocated topic / type manually" },
@@ -3247,16 +3289,19 @@ function renderProfessorLogin() {
       const batch = batchById(slot.batchId);
       return { value: slot.id, label: `${dayLabel(slot.date)} ${formatTimeRange(slot.start, slot.end)} | ${batch?.name || ""} | ${paperShort(batch?.level, slotSubject(slot))}` };
     }), selectedSlot?.id || ""),
+    `<input type="hidden" name="actualLectureId" value="${escapeHtml(editingActual?.id || "")}">`,
     selectField("topicPlanId", "Allocated Topic", planOptions, selectedPlan?.id || ""),
-    field("topic", "Actual Topic Taught", "text", selectedPlan ? plannedTopicText(selectedPlan) : "", "placeholder=\"Write exact topic taught\" required"),
-    field("timeIn", "Time In", "time", selectedSlot?.start || "07:00", "required"),
-    field("timeOut", "Time Out", "time", selectedSlot?.end || "10:00", "required"),
-    field("actualHours", "Actual Hrs", "number", selectedSlot ? hoursBetween(selectedSlot.start, selectedSlot.end).toFixed(1) : "0", "min=\"0\" step=\"0.5\" required"),
-    `<label><span>Lecture Status</span><select name="lectureStatus"><option value="Completed">Completed</option><option value="Partly Completed">Partly Completed</option><option value="Not Completed">Not Completed</option></select></label>`,
-    field("pendingPortion", "Pending Portion", "text", "", "placeholder=\"If anything remains, write here\""),
-    `<label class="wide"><span>Remarks</span><textarea name="remarks" placeholder="Covered examples, test planned, extra practice needed..."></textarea></label>`,
-    `<div class="row-actions wide"><button type="submit">Submit Actual Lecture</button></div>`
+    field("topic", "Actual Topic Taught", "text", editingActual?.topic || (selectedPlan ? plannedTopicText(selectedPlan) : ""), "placeholder=\"Write exact topic taught\" required"),
+    field("timeIn", "Time In", "time", editingActual?.timeIn || selectedSlot?.start || "07:00", "required"),
+    field("timeOut", "Time Out", "time", editingActual?.timeOut || selectedSlot?.end || "10:00", "required"),
+    field("breakMinutes", "Break Minutes", "number", editingActual?.breakMinutes || "0", "min=\"0\" step=\"5\" required"),
+    field("actualHours", "Actual Hrs", "number", editingActual ? Number(editingActual.actualHours || 0).toFixed(2) : selectedSlot ? hoursBetween(selectedSlot.start, selectedSlot.end).toFixed(2) : "0.00", "min=\"0\" step=\"0.01\" readonly required"),
+    `<label><span>Lecture Status</span><select name="lectureStatus"><option value="Completed" ${editingActual?.lectureStatus === "Completed" ? "selected" : ""}>Completed</option><option value="Partly Completed" ${editingActual?.lectureStatus === "Partly Completed" ? "selected" : ""}>Partly Completed</option><option value="Not Completed" ${editingActual?.lectureStatus === "Not Completed" ? "selected" : ""}>Not Completed</option></select></label>`,
+    field("pendingPortion", "Pending Portion", "text", editingActual?.pendingPortion || "", "placeholder=\"If anything remains, write here\""),
+    `<label class="wide"><span>Remarks</span><textarea name="remarks" placeholder="Covered examples, test planned, extra practice needed...">${escapeHtml(editingActual?.remarks || "")}</textarea></label>`,
+    `<div class="row-actions wide">${editingActual ? `<button class="ghost" type="button" data-cancel-actual-edit="true">Cancel Edit</button>` : ""}<button type="submit">${editingActual ? "Update Actual Lecture" : "Submit Actual Lecture"}</button></div>`
   ].join("");
+  updateActualHoursField($("#professorActualForm"));
 
   const records = data.actualLectures
     .filter((entry) => entry.professorId === professorId)
@@ -3264,18 +3309,19 @@ function renderProfessorLogin() {
   $("#professorActualCount").textContent = `${records.length} records`;
   $("#professorActualTable").innerHTML = records.map((entry) => {
     const batch = batchById(entry.batchId);
-    return `<tr>
+    return `<tr class="actual-record-row ${entry.id === editingActualLectureId ? "editing-row" : ""}" data-edit-actual="${escapeHtml(entry.id)}" title="Click to edit this actual lecture">
       <td>${escapeHtml(fullDateLabel(entry.date))}</td>
       <td>${escapeHtml(formatTimeRange(entry.start, entry.end))}</td>
       <td><strong>${escapeHtml(batch?.name || "")}</strong></td>
       <td>${escapeHtml(entry.topic)}</td>
       <td>${Number(entry.actualHours || 0).toFixed(1)}</td>
-      <td>${escapeHtml(formatTimeRange(entry.timeIn || entry.start, entry.timeOut || entry.end))}</td>
+      <td>${escapeHtml(formatTimeRange(entry.timeIn || entry.start, entry.timeOut || entry.end))}${Number(entry.breakMinutes || 0) ? ` / Break ${Number(entry.breakMinutes)} min` : ""}</td>
       <td>${escapeHtml(entry.lectureStatus || "Completed")}</td>
       <td>${escapeHtml(entry.pendingPortion || "")}</td>
       <td>${escapeHtml(entry.remarks || "")}</td>
+      <td><button class="tiny danger" data-delete-actual="${escapeHtml(entry.id)}" type="button">Delete</button></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="9" class="empty">No actual lecture submitted by this professor yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="10" class="empty">No actual lecture submitted by this professor yet.</td></tr>`;
 }
 
 function renderWeeklyInsights(dates, visibleBatches, activeTimeSlots) {
@@ -3290,17 +3336,43 @@ function renderWeeklyInsights(dates, visibleBatches, activeTimeSlots) {
   const noLectures = weekSlots.filter((slot) => slot.noLecture);
   const conflicts = planned.filter((slot) => slotHasProfessorConflict(slot));
   const hours = planned.reduce((sum, slot) => sum + hoursBetween(slot.start, slot.end), 0);
-  const dummy = weekSlots.filter(isDummy).length;
+  const seenPairs = new Set();
+  const conflictRows = conflicts.flatMap((slot) => {
+    const batch = batchById(slot.batchId);
+    return overlappingProfessorSlots(slot)
+      .filter((other) => !conflictIsApproved(slot, other))
+      .map((other) => {
+        const key = conflictPairKey(slot, other);
+        if (seenPairs.has(key)) return "";
+        seenPairs.add(key);
+        const otherBatch = batchById(other.batchId);
+        return `<tr>
+          <td>${escapeHtml(dayLabel(slot.date))}</td>
+          <td>${escapeHtml(formatTimeRange(slot.start, slot.end))}</td>
+          <td>${escapeHtml(professorName(slotProfessorId(slot)))}</td>
+          <td>${escapeHtml(batch?.name || "")}</td>
+          <td>${escapeHtml(otherBatch?.name || "")}</td>
+          <td><button class="tiny ghost" data-approve-conflict="${escapeHtml(slot.id)}" data-other-slot="${escapeHtml(other.id)}" type="button">Approve Combined</button></td>
+        </tr>`;
+      });
+  }).join("");
   panel.innerHTML = [
     { label: "Planned lectures", value: planned.length, note: `${hours.toFixed(1)} faculty hours` },
-    { label: "Open cells", value: Math.max(0, dates.length * visibleBatches.length - weekSlots.length), note: "Visible batch-day gaps" },
-    { label: "Conflicts", value: conflicts.length, note: conflicts.length ? "Needs attention" : "No same-time professor clash" },
-    { label: "No lecture / dummy", value: `${noLectures.length} / ${dummy}`, note: "Breaks and preview rows" }
-  ].map((item) => `<article class="insight-card">
+    { label: "No lecture", value: noLectures.length, note: "Breaks / cancelled lectures" },
+    { label: "Conflicts", value: conflicts.length, note: conflicts.length ? "Click to view details" : "No same-time professor clash", conflict: true }
+  ].map((item) => `<article class="insight-card ${item.conflict ? "clickable-insight" : ""}" ${item.conflict ? "data-toggle-conflicts=\"true\"" : ""}>
     <span>${escapeHtml(item.label)}</span>
     <strong>${escapeHtml(item.value)}</strong>
     <small>${escapeHtml(item.note)}</small>
-  </article>`).join("");
+  </article>`).join("") + `<div class="weekly-conflict-details hidden" id="weeklyConflictDetails">
+    <strong>Conflict Details</strong>
+    <div class="table-wrap mini-table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Time</th><th>Professor</th><th>Batch</th><th>Also Assigned To</th><th>Action</th></tr></thead>
+        <tbody>${conflictRows || `<tr><td colspan="6" class="empty">No conflicts in current weekly view.</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
 function renderWeeklyTable() {
@@ -3961,6 +4033,19 @@ function renderChangesTTBatchPreview(validRows) {
       importSource: changedTTSource
     };
   });
+  const renderSlotRows = (rows, batch, emptyText) => rows
+    .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`))
+    .map((slot) => {
+      const professor = slot.noLecture ? "-" : slot.professorName || professorName(slotProfessorId(slot));
+      const subject = slot.noLecture ? "No Lecture" : paperShort(batch.level, slot.subject);
+      return `<tr>
+        <td>${escapeHtml(dayLabel(slot.date))}</td>
+        <td>${escapeHtml(formatTimeRange(slot.start, slot.end))}</td>
+        <td>${escapeHtml(professor)}</td>
+        <td>${escapeHtml(subject)}</td>
+        <td>${sourceBadge(slot) || `<span class="status green">Existing</span>`}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="5" class="empty">${escapeHtml(emptyText)}</td></tr>`;
   const batchMap = new Map(validRows.map((entry) => {
     const batch = changesTTPreviewBatch(entry);
     return [batch.id, batch];
@@ -3970,30 +4055,43 @@ function renderChangesTTBatchPreview(validRows) {
   const to = dates[dates.length - 1];
   return `<div class="changes-tt-batch-preview">
     ${Array.from(batchMap.values()).map((batch) => {
-      const proposedKeys = new Set(proposedSlots
-        .filter((slot) => slot.batchId === batch.id)
-        .map((slot) => `${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`));
-      const existing = data.slots
-        .filter((slot) => slot.batchId === batch.id && slot.date >= from && slot.date <= to)
-        .filter((slot) => !proposedKeys.has(`${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`));
-      const rows = [...existing, ...proposedSlots.filter((slot) => slot.batchId === batch.id)]
-        .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+      const changedRows = proposedSlots.filter((slot) => slot.batchId === batch.id);
+      const oldRows = data.slots.filter((slot) => slot.batchId === batch.id && slot.date >= from && slot.date <= to);
+      const replacedIds = new Set(changedRows.map((changed) => {
+        const exact = oldRows.find((slot) => slot.date === changed.date && slot.start === changed.start && slot.end === changed.end);
+        if (exact) return exact.id;
+        const sameDay = oldRows.filter((slot) => slot.date === changed.date);
+        return sameDay.length === 1 ? sameDay[0].id : "";
+      }).filter(Boolean));
+      const finalRows = [
+        ...oldRows.filter((slot) => !replacedIds.has(slot.id)),
+        ...changedRows
+      ];
       return `<article>
-        <h3>${escapeHtml(batch.name)} revised timetable</h3>
-        <table>
-          <thead><tr><th>Date</th><th>Time</th><th>Professor</th><th>Subject</th><th>Tag</th></tr></thead>
-          <tbody>${rows.map((slot) => {
-            const professor = slot.noLecture ? "-" : slot.professorName || professorName(slotProfessorId(slot));
-            const subject = slot.noLecture ? "No Lecture" : paperShort(batch.level, slot.subject);
-            return `<tr>
-              <td>${escapeHtml(dayLabel(slot.date))}</td>
-              <td>${escapeHtml(formatTimeRange(slot.start, slot.end))}</td>
-              <td>${escapeHtml(professor)}</td>
-              <td>${escapeHtml(subject)}</td>
-              <td>${sourceBadge(slot) || `<span class="status green">Existing</span>`}</td>
-            </tr>`;
-          }).join("") || `<tr><td colspan="5" class="empty">No timetable rows for this batch in selected change dates.</td></tr>`}</tbody>
-        </table>
+        <h3>${escapeHtml(batch.name)} timetable change preview</h3>
+        <div class="changes-tt-preview-grid">
+          <div>
+            <h4>Old TT</h4>
+            <table>
+              <thead><tr><th>Date</th><th>Time</th><th>Professor</th><th>Subject</th><th>Tag</th></tr></thead>
+              <tbody>${renderSlotRows(oldRows, batch, "No old timetable rows for this batch in selected dates.")}</tbody>
+            </table>
+          </div>
+          <div>
+            <h4>Changed TT</h4>
+            <table>
+              <thead><tr><th>Date</th><th>Time</th><th>Professor</th><th>Subject</th><th>Tag</th></tr></thead>
+              <tbody>${renderSlotRows(changedRows, batch, "No changed rows.")}</tbody>
+            </table>
+          </div>
+          <div>
+            <h4>Final New TT</h4>
+            <table>
+              <thead><tr><th>Date</th><th>Time</th><th>Professor</th><th>Subject</th><th>Tag</th></tr></thead>
+              <tbody>${renderSlotRows(finalRows, batch, "No final timetable rows.")}</tbody>
+            </table>
+          </div>
+        </div>
       </article>`;
     }).join("")}
   </div>`;
@@ -4485,7 +4583,9 @@ function saveActualLecture(event) {
   const topicPlanId = form.elements.topicPlanId.value;
   const topicPlan = data.topicPlans.find((plan) => plan.id === topicPlanId);
   const topic = form.elements.topic.value.trim() || (topicPlan ? plannedTopicText(topicPlan) : "");
-  const actualHours = Number(form.elements.actualHours.value || 0);
+  updateActualHoursField(form);
+  const breakMinutes = Math.max(0, Number(form.elements.breakMinutes.value || 0));
+  const actualHours = actualHoursFromForm(form);
   const record = {
     id: uid("al"),
     slotId: slot.id,
@@ -4498,17 +4598,23 @@ function saveActualLecture(event) {
     topic,
     timeIn: form.elements.timeIn.value,
     timeOut: form.elements.timeOut.value,
+    breakMinutes,
     actualHours,
     lectureStatus: form.elements.lectureStatus.value,
     pendingPortion: form.elements.pendingPortion.value.trim(),
     remarks: form.elements.remarks.value.trim()
   };
-  const existingActual = data.actualLectures.find((entry) => entry.slotId === slot.id && entry.professorId === professorId);
+  const formActualId = form.elements.actualLectureId?.value || "";
+  const existingActual = data.actualLectures.find((entry) =>
+    (formActualId && entry.id === formActualId && entry.professorId === professorId) ||
+    (!formActualId && entry.slotId === slot.id && entry.professorId === professorId)
+  );
   if (existingActual) {
     record.id = existingActual.id;
     Object.assign(existingActual, record);
   }
   else data.actualLectures.push(record);
+  editingActualLectureId = "";
   const progressPayload = {
     id: uid("pr"),
     actualLectureId: record.id,
@@ -4517,13 +4623,13 @@ function saveActualLecture(event) {
     date: record.date,
     topic: record.topic,
     hours: actualHours,
-    remarks: `Actual entry: ${record.timeIn} to ${record.timeOut} | ${record.lectureStatus}${record.pendingPortion ? ` | Pending: ${record.pendingPortion}` : ""}${record.remarks ? ` | ${record.remarks}` : ""}`
+    remarks: `Actual entry: ${record.timeIn} to ${record.timeOut} | Break ${record.breakMinutes} min | ${record.lectureStatus}${record.pendingPortion ? ` | Pending: ${record.pendingPortion}` : ""}${record.remarks ? ` | ${record.remarks}` : ""}`
   };
   const existingProgress = data.progress.find((entry) => entry.actualLectureId === record.id);
   if (existingProgress) Object.assign(existingProgress, { ...progressPayload, id: existingProgress.id });
   else data.progress.push(progressPayload);
   saveData();
-  if (isProfessorMode() && cloudSyncUrl()) saveCloudData();
+  if (isProfessorMode() && cloudSyncUrl()) saveCloudData({ silent: true });
 }
 
 function saveProfessorManagement(professorId) {
@@ -4688,14 +4794,7 @@ function bindEvents() {
         event.currentTarget.elements.topic.value = plannedTopicText(plan);
       }
     }
-    if (["timeIn", "timeOut"].includes(event.target.name)) {
-      const form = event.currentTarget;
-      const timeIn = form.elements.timeIn.value;
-      const timeOut = form.elements.timeOut.value;
-      if (timeIn && timeOut && form.elements.actualHours) {
-        form.elements.actualHours.value = hoursBetween(timeIn, timeOut).toFixed(1);
-      }
-    }
+    if (["timeIn", "timeOut", "breakMinutes"].includes(event.target.name)) updateActualHoursField(event.currentTarget);
   });
   $("#copyBatchShareBtn").addEventListener("click", () => copyTextFrom("#batchShareText"));
   $("#copyProfessorShareBtn").addEventListener("click", () => copyTextFrom("#professorShareText"));
@@ -4748,6 +4847,55 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const deleteActualId = event.target.dataset.deleteActual;
+    if (deleteActualId) {
+      const entry = data.actualLectures.find((item) => item.id === deleteActualId);
+      if (!entry) return;
+      if (isProfessorMode() && entry.professorId !== loggedInProfessorId()) {
+        alert("This login can delete only its own actual lecture records.");
+        return;
+      }
+      if (confirm("Delete this actual lecture entry?")) {
+        data.actualLectures = data.actualLectures.filter((item) => item.id !== deleteActualId);
+        data.progress = data.progress.filter((item) => item.actualLectureId !== deleteActualId);
+        if (editingActualLectureId === deleteActualId) editingActualLectureId = "";
+        saveData();
+        if (isProfessorMode() && cloudSyncUrl()) saveCloudData({ silent: true });
+      }
+      return;
+    }
+    const editActualId = event.target.closest("[data-edit-actual]")?.dataset.editActual;
+    if (editActualId) {
+      const entry = data.actualLectures.find((item) => item.id === editActualId);
+      if (entry && (!isProfessorMode() || entry.professorId === loggedInProfessorId())) {
+        editingActualLectureId = editActualId;
+        renderProfessorLogin();
+        $("#professorActualForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return;
+    }
+    if (event.target.dataset.cancelActualEdit) {
+      editingActualLectureId = "";
+      renderProfessorLogin();
+      return;
+    }
+    if (event.target.closest("[data-toggle-conflicts]")) {
+      $("#weeklyConflictDetails")?.classList.toggle("hidden");
+      return;
+    }
+    const approveSlotId = event.target.dataset.approveConflict;
+    const otherSlotId = event.target.dataset.otherSlot;
+    if (approveSlotId && otherSlotId) {
+      const first = data.slots.find((slot) => slot.id === approveSlotId);
+      const second = data.slots.find((slot) => slot.id === otherSlotId);
+      if (first && second) {
+        const key = conflictPairKey(first, second);
+        first.approvedConflicts = [...new Set([...(first.approvedConflicts || []), key])];
+        second.approvedConflicts = [...new Set([...(second.approvedConflicts || []), key])];
+        saveData();
+      }
+      return;
+    }
     const slotId = event.target.dataset.deleteSlot;
     const progressId = event.target.dataset.deleteProgress;
     const batchId = event.target.dataset.deleteBatch;
