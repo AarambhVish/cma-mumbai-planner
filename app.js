@@ -1248,9 +1248,10 @@ function inferProfessorPapers(professor) {
   return matches.length ? matches : allPapers();
 }
 
-function saveData() {
+function saveData(options = {}) {
   localStorage.setItem(storeKey, JSON.stringify(data));
   render();
+  if (!options.skipCloudSave) scheduleCloudAutoSave();
 }
 
 const loginSessionKey = "cma-planner-login-ok";
@@ -1260,6 +1261,8 @@ const loginId = "CMATT";
 const loginPassword = "cma";
 let cloudSaveReminderId = null;
 let editingActualLectureId = "";
+let cloudAutoSaveId = null;
+let cloudLoadInProgress = false;
 
 function isLoggedIn() {
   return sessionStorage.getItem(loginSessionKey) === "yes";
@@ -1358,6 +1361,12 @@ function startCloudSaveReminder() {
   }, 15 * 60 * 1000);
 }
 
+function scheduleCloudAutoSave() {
+  if (!isLoggedIn() || isProfessorMode() || cloudLoadInProgress || !cloudSyncUrl()) return;
+  clearTimeout(cloudAutoSaveId);
+  cloudAutoSaveId = setTimeout(() => saveCloudData({ silent: true }), 5000);
+}
+
 function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1429,12 +1438,14 @@ function requireCloudSyncUrl() {
 function loadCloudData() {
   const url = requireCloudSyncUrl();
   if (!url) return;
+  cloudLoadInProgress = true;
 
   const callbackName = `cmaCloudLoad_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const script = document.createElement("script");
   let timeoutId;
   const cleanup = () => {
     clearTimeout(timeoutId);
+    cloudLoadInProgress = false;
     delete window[callbackName];
     script.remove();
   };
@@ -1454,7 +1465,7 @@ function loadCloudData() {
     data = { ...structuredClone(defaultData), ...response.data };
     ensureDataShape();
     data.settings.googleWebAppUrl = savedUrl || data.settings.googleWebAppUrl || "";
-    saveData();
+    saveData({ skipCloudSave: true });
     alert("Cloud data loaded into this device.");
   };
 
