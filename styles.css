@@ -125,6 +125,26 @@ h2 {
   border-radius: 8px;
 }
 
+.cloud-status {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 116px;
+  text-align: left;
+}
+
+.cloud-status.saving {
+  color: var(--gold);
+}
+
+.cloud-status.saved {
+  color: var(--green);
+}
+
+.cloud-status.error {
+  color: var(--red);
+}
+
 button.program-pill {
   min-height: 30px;
   padding: 0 12px;

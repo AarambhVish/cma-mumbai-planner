@@ -1683,10 +1683,18 @@ function requireCloudSyncUrl() {
   return url;
 }
 
+function updateCloudStatus(message = "", tone = "") {
+  const status = $("#cloudStatus");
+  if (!status) return;
+  status.textContent = message || (data.settings.lastCloudSavedAt ? `Saved ${new Date(data.settings.lastCloudSavedAt).toLocaleTimeString()}` : "Cloud not checked");
+  status.className = `cloud-status ${tone}`.trim();
+}
+
 function loadCloudData() {
   const url = requireCloudSyncUrl();
   if (!url) return;
   cloudLoadInProgress = true;
+  updateCloudStatus("Loading...", "saving");
 
   const callbackName = `cmaCloudLoad_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const script = document.createElement("script");
@@ -1714,17 +1722,22 @@ function loadCloudData() {
     ensureDataShape();
     data.settings.googleWebAppUrl = savedUrl || data.settings.googleWebAppUrl || "";
     saveData({ skipCloudSave: true });
-    alert("Cloud data loaded into this device.");
+    updateCloudStatus(data.settings.lastCloudSavedAt ? `Loaded ${new Date(data.settings.lastCloudSavedAt).toLocaleTimeString()}` : "Loaded", "saved");
+    alert(data.settings.lastCloudSavedAt
+      ? `Cloud data loaded. Last cloud save was ${new Date(data.settings.lastCloudSavedAt).toLocaleString()}.`
+      : "Cloud data loaded into this device.");
   };
 
   script.onerror = () => {
     cleanup();
+    updateCloudStatus("Load failed", "error");
     alert("Could not reach Google cloud sync. Check that your pasted URL is the deployed Web App /exec URL and access is set to Anyone with the link.");
   };
   script.src = `${url}${url.includes("?") ? "&" : "?"}action=load&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
   document.body.appendChild(script);
   timeoutId = setTimeout(() => {
     cleanup();
+    updateCloudStatus("Load timeout", "error");
     alert("Google cloud sync opened but did not return data. In Apps Script, deploy as Web App with access: Anyone with the link, then copy the /exec URL again.");
   }, 12000);
 }
@@ -1733,11 +1746,31 @@ function saveCloudData(options = {}) {
   const silent = Boolean(options.silent);
   const url = requireCloudSyncUrl();
   if (!url) return;
+  data.settings.lastCloudSavedAt = new Date().toISOString();
+  localStorage.setItem(storeKey, JSON.stringify(data));
+  updateCloudStatus("Saving...", "saving");
 
   const iframeName = `cmaCloudSaveFrame_${Date.now()}`;
   const iframe = document.createElement("iframe");
   iframe.name = iframeName;
   iframe.style.display = "none";
+  let completed = false;
+  let submitted = false;
+  let timeoutId;
+
+  const cleanup = () => {
+    clearTimeout(timeoutId);
+    iframe.remove();
+    form.remove();
+  };
+
+  iframe.addEventListener("load", () => {
+    if (!submitted || completed) return;
+    completed = true;
+    cleanup();
+    updateCloudStatus(`Saved ${new Date(data.settings.lastCloudSavedAt).toLocaleTimeString()}`, "saved");
+    if (!silent) alert(`Planner data saved to Google cloud at ${new Date(data.settings.lastCloudSavedAt).toLocaleString()}.`);
+  });
 
   const form = document.createElement("form");
   form.method = "POST";
@@ -1752,12 +1785,15 @@ function saveCloudData(options = {}) {
   form.appendChild(payloadInput);
 
   document.body.append(iframe, form);
+  submitted = true;
   form.submit();
-  setTimeout(() => {
-    iframe.remove();
-    form.remove();
-    if (!silent) alert("Planner data save request sent to Google cloud.");
-  }, 1200);
+  timeoutId = setTimeout(() => {
+    if (completed) return;
+    completed = true;
+    cleanup();
+    updateCloudStatus("Save timeout", "error");
+    if (!silent) alert("Cloud Save did not confirm within 25 seconds. Please check internet and Apps Script deployment, then try Cloud Save again.");
+  }, 25000);
 }
 
 function uid(prefix) {
@@ -5560,6 +5596,7 @@ function safeRenderStep(name, callback) {
 
 function render() {
   safeRenderStep("Program switch", renderProgramSwitch);
+  safeRenderStep("Cloud status", () => updateCloudStatus());
   safeRenderStep("Filter visibility", updateFilterVisibility);
   safeRenderStep("Filters", renderFilters);
   safeRenderStep("Forms", renderForms);
