@@ -17,6 +17,42 @@
   --shadow: 0 10px 24px rgba(23, 32, 51, 0.07);
 }
 
+body[data-program="usa"] {
+  --brand: #4c1d95;
+  --brand-dark: #2e1065;
+  --brand-soft: #ede9fe;
+  --nav: #24123f;
+  --gold: #a16207;
+  --blue: #5b21b6;
+  background: #eeeaf6;
+}
+
+body[data-program="usa"] .topbar {
+  background: linear-gradient(90deg, #fbfaff 0%, #eee7fb 100%);
+  border-bottom-color: #c9b7ee;
+}
+
+body[data-program="usa"] h1 {
+  color: #24123f;
+}
+
+body[data-program="usa"] .panel-head {
+  background: linear-gradient(90deg, #f7f2ff 0%, #ffffff 100%);
+}
+
+body[data-program="usa"] .tabs {
+  background: #24123f;
+}
+
+body[data-program="usa"] button.import-sheet-btn {
+  background: #5b21b6;
+  box-shadow: 0 6px 16px rgba(91, 33, 182, 0.2);
+}
+
+body[data-program="usa"] button.import-sheet-btn:hover {
+  background: #3b0f82;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -76,6 +112,32 @@ h2 {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.program-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: #d9e6ef;
+  border: 1px solid #bdcedd;
+  border-radius: 8px;
+}
+
+button.program-pill {
+  min-height: 30px;
+  padding: 0 12px;
+  background: transparent;
+  color: #315064;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+button.program-pill:hover,
+button.program-pill.active {
+  background: var(--brand);
+  color: #fff;
 }
 
 button,
@@ -1055,6 +1117,35 @@ tr:last-child td {
   background: #fff4d8 !important;
 }
 
+.self-topic-summary {
+  align-self: end;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.self-topic-summary strong {
+  color: var(--brand-dark);
+}
+
+.self-topic-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.self-topic-list {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.topic-check.locked-topic {
+  opacity: 0.62;
+  background: #f5f5f5;
+}
+
 .meter {
   width: 110px;
   height: 8px;
@@ -1166,17 +1257,63 @@ tr:last-child td {
   min-width: 280px;
 }
 
+#professorManagementTable th:nth-child(4),
+#professorManagementTable td:nth-child(4) {
+  min-width: 230px;
+}
+
 #professorManagementTable th:last-child,
 #professorManagementTable td:last-child {
   width: 210px;
   min-width: 210px;
 }
 
-#professorManagementTable th:nth-child(5),
-#professorManagementTable td:nth-child(5),
 #professorManagementTable th:nth-child(6),
-#professorManagementTable td:nth-child(6) {
+#professorManagementTable td:nth-child(6),
+#professorManagementTable th:nth-child(7),
+#professorManagementTable td:nth-child(7) {
   min-width: 150px;
+}
+
+.head-paper-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(42px, 1fr));
+  gap: 6px;
+  max-width: 260px;
+}
+
+.head-paper-chip {
+  position: relative;
+  min-height: 30px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.head-paper-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.head-paper-chip span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid #c9d6e2;
+  border-radius: 7px;
+  background: #f5f8fb;
+  color: #506176;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.head-paper-chip.selected span,
+.head-paper-chip input:checked + span {
+  background: #ffe2a6;
+  border-color: #c98710;
+  color: #6f4600;
+  box-shadow: inset 0 0 0 1px rgba(201, 135, 16, 0.32);
 }
 
 .professor-name-cell {

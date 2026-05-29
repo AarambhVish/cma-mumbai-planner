@@ -48,9 +48,13 @@
     <header class="topbar">
       <div>
         <h1>CMA Mumbai Planner</h1>
-        <p>Batch timetable, faculty allocation, and syllabus completion control.</p>
+        <p id="programSubtitle">Batch timetable, faculty allocation, and syllabus completion control.</p>
       </div>
       <div class="topbar-actions">
+        <div class="program-switch" role="group" aria-label="Program">
+          <button class="program-pill active" data-program="CMA India" type="button">CMA India</button>
+          <button class="program-pill" data-program="CMA USA" type="button">CMA USA</button>
+        </div>
         <button class="ghost" id="exportBtn" title="Export data">Export</button>
         <label class="ghost file-trigger" title="Import data">
           Import
@@ -534,6 +538,15 @@ Professor : Sandesh Sir
         </section>
         <section class="panel">
           <div class="panel-head">
+            <div>
+              <h2>My Topic Selection</h2>
+              <span>Select topics you can teach for your assigned batch and paper.</span>
+            </div>
+          </div>
+          <form id="professorSelfTopicForm" class="form-grid compact"></form>
+        </section>
+        <section class="panel">
+          <div class="panel-head">
             <h2>Actual Lecture Records</h2>
             <span id="professorActualCount"></span>
           </div>
@@ -617,7 +630,7 @@ Professor : Sandesh Sir
               <select id="professorManagementLevel"></select>
             </label>
             <label>
-              Paper No.
+              Paper / Section
               <select id="professorManagementPaper"></select>
             </label>
           </div>
@@ -627,7 +640,8 @@ Professor : Sandesh Sir
                 <tr>
                   <th>Professor Name</th>
                   <th>Levels</th>
-                  <th>Paper Nos.</th>
+                  <th>Paper / Section</th>
+                  <th id="headPaperHeader">Head Papers</th>
                   <th>Mapped Papers</th>
                   <th>Login ID</th>
                   <th>Password</th>

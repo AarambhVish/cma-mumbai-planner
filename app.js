@@ -15,9 +15,11 @@ const defaultTimeSlots = [
 const batchPalettes = {
   Foundation: ["#d8eef3", "#f7d9df"],
   Inter: ["#e2efd8", "#f8e1c5", "#dce7f8", "#fff0b8"],
-  Final: ["#eadff5", "#d9f0e8", "#eee3d6", "#e1e4f2"]
+  Final: ["#eadff5", "#d9f0e8", "#eee3d6", "#e1e4f2"],
+  "CMA USA Part 1": ["#d8f3e8", "#e8f7d2", "#d7f0ff"],
+  "CMA USA Part 2": ["#fff0c8", "#ffe0df", "#eadfff"]
 };
-const batchPalette = [...batchPalettes.Foundation, ...batchPalettes.Inter, ...batchPalettes.Final];
+const batchPalette = Object.values(batchPalettes).flat();
 const professorPalette = ["#cfe8ff", "#ffd6d6", "#d9f7d8", "#ffe6a8", "#e8d7ff", "#c8f3ef", "#f5d0e2", "#dfe7ff", "#f1e0c5", "#d7f0bf", "#ffc9a9", "#d4d4ff", "#bfe9df", "#f7cdd2", "#cde4b8"];
 
 const cmaPapers = {
@@ -60,7 +62,32 @@ const cmaPapers = {
       "Indirect Tax Laws and Practice",
       "Strategic Performance Mgmt & Business Valuation"
     ]
+  },
+  "CMA USA Part 1": {
+    "Part 1": [
+      "CMA USA Part 1 - Section A: External Financial Reporting Decisions",
+      "CMA USA Part 1 - Section B: Planning, Budgeting, and Forecasting",
+      "CMA USA Part 1 - Section C: Performance Management",
+      "CMA USA Part 1 - Section D: Cost Management",
+      "CMA USA Part 1 - Section E: Internal Controls",
+      "CMA USA Part 1 - Section F: Technology and Analytics"
+    ]
+  },
+  "CMA USA Part 2": {
+    "Part 2": [
+      "CMA USA Part 2 - Section A: Financial Statement Analysis",
+      "CMA USA Part 2 - Section B: Corporate Finance",
+      "CMA USA Part 2 - Section C: Decision Analysis",
+      "CMA USA Part 2 - Section D: Risk Management",
+      "CMA USA Part 2 - Section E: Investment Decisions",
+      "CMA USA Part 2 - Section F: Professional Ethics"
+    ]
   }
+};
+
+const programs = {
+  "CMA India": ["Foundation", "Inter", "Final"],
+  "CMA USA": ["CMA USA Part 1", "CMA USA Part 2"]
 };
 
 const paperNumbers = {
@@ -87,7 +114,19 @@ const paperNumbers = {
   "Cost and Management Audit": 17,
   "Corporate Financial Reporting": 18,
   "Indirect Tax Laws and Practice": 19,
-  "Strategic Performance Mgmt & Business Valuation": 20
+  "Strategic Performance Mgmt & Business Valuation": 20,
+  "CMA USA Part 1 - Section A: External Financial Reporting Decisions": 101,
+  "CMA USA Part 1 - Section B: Planning, Budgeting, and Forecasting": 102,
+  "CMA USA Part 1 - Section C: Performance Management": 103,
+  "CMA USA Part 1 - Section D: Cost Management": 104,
+  "CMA USA Part 1 - Section E: Internal Controls": 105,
+  "CMA USA Part 1 - Section F: Technology and Analytics": 106,
+  "CMA USA Part 2 - Section A: Financial Statement Analysis": 201,
+  "CMA USA Part 2 - Section B: Corporate Finance": 202,
+  "CMA USA Part 2 - Section C: Decision Analysis": 203,
+  "CMA USA Part 2 - Section D: Risk Management": 204,
+  "CMA USA Part 2 - Section E: Investment Decisions": 205,
+  "CMA USA Part 2 - Section F: Professional Ethics": 206
 };
 
 const paperShortNames = {
@@ -114,7 +153,19 @@ const paperShortNames = {
   "Cost and Management Audit": "CMAudit",
   "Corporate Financial Reporting": "CFR",
   "Indirect Tax Laws and Practice": "IDT",
-  "Strategic Performance Mgmt & Business Valuation": "SPM & BV"
+  "Strategic Performance Mgmt & Business Valuation": "SPM & BV",
+  "CMA USA Part 1 - Section A: External Financial Reporting Decisions": "P1 Sec A",
+  "CMA USA Part 1 - Section B: Planning, Budgeting, and Forecasting": "P1 Sec B",
+  "CMA USA Part 1 - Section C: Performance Management": "P1 Sec C",
+  "CMA USA Part 1 - Section D: Cost Management": "P1 Sec D",
+  "CMA USA Part 1 - Section E: Internal Controls": "P1 Sec E",
+  "CMA USA Part 1 - Section F: Technology and Analytics": "P1 Sec F",
+  "CMA USA Part 2 - Section A: Financial Statement Analysis": "P2 Sec A",
+  "CMA USA Part 2 - Section B: Corporate Finance": "P2 Sec B",
+  "CMA USA Part 2 - Section C: Decision Analysis": "P2 Sec C",
+  "CMA USA Part 2 - Section D: Risk Management": "P2 Sec D",
+  "CMA USA Part 2 - Section E: Investment Decisions": "P2 Sec E",
+  "CMA USA Part 2 - Section F: Professional Ethics": "P2 Sec F"
 };
 
 const realProfessors = [
@@ -134,6 +185,7 @@ const realProfessors = [
   { id: "chirag-jain-sir", name: "Chirag Jain Sir", speciality: "Corporate Laws", home: "Online", levels: ["Final"], papers: ["Corporate and Economic Laws"] },
   { id: "swapnil-sir", name: "Swapnil Sir", speciality: "Direct Tax", home: "Online", levels: ["Final"], papers: ["Direct Tax Laws & International Taxation"] }
 ];
+const indiaProfessorMaster = new Map(realProfessors.map((professor) => [professor.id, professor]));
 
 function topicRows(paperNo, paperName, rows) {
   return rows.map((row, index) => {
@@ -521,7 +573,19 @@ const topicMaster = [
     ["PMBV: Valuation Models", 8],
     ["PMBV: Valuation Of Assets And Liabilities", 14],
     ["PMBV: Valuation In Mergers And Acquisitions", 16]
-  ])
+  ]),
+  ...topicRows(101, "CMA USA Part 1 - Section A", [["External Financial Reporting Decisions", 0]]),
+  ...topicRows(102, "CMA USA Part 1 - Section B", [["Planning, Budgeting, and Forecasting", 0]]),
+  ...topicRows(103, "CMA USA Part 1 - Section C", [["Performance Management", 0]]),
+  ...topicRows(104, "CMA USA Part 1 - Section D", [["Cost Management", 0]]),
+  ...topicRows(105, "CMA USA Part 1 - Section E", [["Internal Controls", 0]]),
+  ...topicRows(106, "CMA USA Part 1 - Section F", [["Technology and Analytics", 0]]),
+  ...topicRows(201, "CMA USA Part 2 - Section A", [["Financial Statement Analysis", 0]]),
+  ...topicRows(202, "CMA USA Part 2 - Section B", [["Corporate Finance", 0]]),
+  ...topicRows(203, "CMA USA Part 2 - Section C", [["Decision Analysis", 0]]),
+  ...topicRows(204, "CMA USA Part 2 - Section D", [["Risk Management", 0]]),
+  ...topicRows(205, "CMA USA Part 2 - Section E", [["Investment Decisions", 0]]),
+  ...topicRows(206, "CMA USA Part 2 - Section F", [["Professional Ethics", 0]])
 ];
 
 const realBatchNames = [
@@ -669,14 +733,27 @@ function importedBatchName(rawName) {
     .toUpperCase();
 }
 
+function isCmaUsaText(value) {
+  return /CMA[_\s-]*USA|US[_\s-]*CMA/.test(String(value || "").toUpperCase());
+}
+
+function cmaUsaLevelFromText(value) {
+  const text = String(value || "").toUpperCase();
+  return /PART[_\s-]*2|\bP2\b/.test(text) ? "CMA USA Part 2" : "CMA USA Part 1";
+}
+
 function importedBatchMeta(rawName, subject) {
   const name = importedBatchName(rawName);
+  const isUsa = isCmaUsaText(rawName);
+  const usaPart = cmaUsaLevelFromText(rawName);
   const isInter = name.startsWith("CMAI_");
   const isFinal = name.startsWith("CMA_FINAL");
-  const level = isFinal ? "Final" : isInter ? "Inter" : "Foundation";
-  const group = level === "Final" ? (name.includes("_G4_") ? "Group 4" : "Group 3") : level === "Inter" && papersForLevel("Inter").includes(subject) ? "Group 1" : "Foundation";
+  const level = isUsa ? usaPart : isFinal ? "Final" : isInter ? "Inter" : "Foundation";
+  const group = isUsa ? (usaPart.endsWith("2") ? "Part 2" : "Part 1") : level === "Final" ? (name.includes("_G4_") ? "Group 4" : "Group 3") : level === "Inter" && papersForLevel("Inter").includes(subject) ? "Group 1" : "Foundation";
   const attempt = name.includes("_J27_") ? "Jun 2027" : name.includes("_J26/D26_") ? "Jun 2026 / Dec 2026" : name.includes("_J26_") ? "Jun 2026" : "Dec 2026";
-  const centreCode = isFinal
+  const centreCode = isUsa
+    ? name.replace(/^(CMA_)?USA_?/, "").replace(/^US_CMA_?/, "").replace(/^PART_?[12]_?/, "")
+    : isFinal
     ? name.split(/_G[34]_/).pop()
     : name.replace(/^CMAI_D26_/, "").replace(/^CMAF_[DJ]26_/, "");
   const centre = titleFromCode(centreCode);
@@ -696,6 +773,7 @@ function importedBatchMeta(rawName, subject) {
 }
 
 function standardPlannedHours(level, group = "", name = "") {
+  if (String(level).startsWith("CMA USA")) return 100;
   if (level === "Foundation") return 240;
   if (level === "Inter") return 640;
   if (String(name).includes("G3") && String(name).includes("G4")) return 981;
@@ -705,7 +783,7 @@ function standardPlannedHours(level, group = "", name = "") {
 }
 
 function levelOrder(level) {
-  return { Foundation: 0, Inter: 1, Final: 2 }[level] ?? 9;
+  return { Foundation: 0, Inter: 1, Final: 2, "CMA USA Part 1": 3, "CMA USA Part 2": 4 }[level] ?? 9;
 }
 
 function defaultLevelColor(level) {
@@ -724,14 +802,24 @@ function ensureImportedProfessor(entry) {
       home: "Online",
       levels: [],
       papers: [],
+      headPaperNos: [],
+      loginId: professorFirstNameCredential(name),
+      loginPassword: professorFirstNameCredential(name),
       color: professorPalette[data.professors.length % professorPalette.length]
     };
     data.professors.push(professor);
   }
-  entry.levels.forEach((level) => {
+  const indiaMaster = indiaProfessorMaster.get(professor.id);
+  const levelsToAdd = indiaMaster
+    ? entry.levels.filter((level) => programForLevel(level) === "CMA India")
+    : entry.levels;
+  const papersToAdd = indiaMaster
+    ? entry.papers.filter((paper) => levelsForPaper(paper).some((level) => programForLevel(level) === "CMA India"))
+    : entry.papers;
+  levelsToAdd.forEach((level) => {
     if (!professor.levels.includes(level)) professor.levels.push(level);
   });
-  entry.papers.forEach((paper) => {
+  papersToAdd.forEach((paper) => {
     if (!professor.papers.includes(paper)) professor.papers.push(paper);
   });
   return professor;
@@ -811,6 +899,7 @@ const defaultData = {
     googleSheetLink: "https://docs.google.com/spreadsheets/d/1QC7jdICqY237tKxiOLWJtDJ5Huaa4HSA/edit?usp=sharing",
     googleWebAppUrl: "",
     weeklyColumnWidth: 180,
+    activeProgram: "CMA India",
     levelBatchDefaultsApplied: false
   },
   centres: ["Andheri", "Borivali", "Borivali Hybrid", "CHM", "Dadar", "Dombivli", "Ghatkopar", "Icon Classes", "Jogeshwari", "Mulund", "Shree Classes", "Thane", "Vashi", "Online"],
@@ -928,18 +1017,25 @@ function ensureDataShape() {
     ...professor,
     levels: Array.isArray(professor.levels) && professor.levels.length ? professor.levels : inferProfessorLevels(professor),
     papers: Array.isArray(professor.papers) && professor.papers.length ? professor.papers : inferProfessorPapers(professor),
-    loginId: professor.loginId || professor.id || slug(professor.name),
-    loginPassword: professor.loginPassword || `cma${String(professor.id || slug(professor.name)).replace(/[^a-z0-9]/gi, "").slice(0, 4)}`,
+    headPaperNos: Array.isArray(professor.headPaperNos) ? professor.headPaperNos.map(Number).filter(Boolean) : [],
+    loginId: isOldAutoProfessorLogin(professor) ? professorFirstNameCredential(professor.name) : professor.loginId,
+    loginPassword: isOldAutoProfessorPassword(professor) ? professorFirstNameCredential(professor.name) : professor.loginPassword,
     color: professor.color || professorPalette[data.professors.findIndex((item) => item.id === professor.id) % professorPalette.length]
   }));
-  data.batches = data.batches.map((batch, index) => ({
-    ...batch,
-    plannedHours: batch.level === "Final" && (!batch.plannedHours || Number(batch.plannedHours) === 400)
-      ? standardPlannedHours(batch.level, batch.group, batch.name)
-      : batch.plannedHours,
-    professorId: undefined,
-    color: paletteForLevel(batch.level).includes(batch.color) ? batch.color : paletteForLevel(batch.level)[index % paletteForLevel(batch.level).length]
-  }));
+  data.professors.forEach(cleanProfessorProgramMapping);
+  data.batches = data.batches.map((batch, index) => {
+    const normalized = normalizeBatchProgram({ ...batch });
+    return {
+      ...normalized,
+      plannedHours: normalized.level === "Final" && (!normalized.plannedHours || Number(normalized.plannedHours) === 400)
+        ? standardPlannedHours(normalized.level, normalized.group, normalized.name)
+        : normalized.plannedHours,
+      professorId: undefined,
+      color: paletteForLevel(normalized.level).includes(normalized.color)
+        ? normalized.color
+        : paletteForLevel(normalized.level)[index % paletteForLevel(normalized.level).length]
+    };
+  });
   if (!data.settings.levelBatchDefaultsApplied) {
     data.batches = data.batches
       .map((batch) => ({ ...batch, color: defaultLevelColor(batch.level) }))
@@ -997,7 +1093,10 @@ function ensureDataShape() {
       professorId: professorIdMigration[plan.professorId] || plan.professorId,
       paperNo,
       allocatedHours: Number(plan.allocatedHours || topic?.standardHours || 0),
-      weekStart: plan.weekStart || formatDateInput(getFriday(new Date()))
+      givenHours: Number(plan.givenHours || 0),
+      weekStart: plan.weekStart || formatDateInput(getFriday(new Date())),
+      assignedByRole: plan.assignedByRole || (plan.selfAssigned ? "professor" : "tt-head"),
+      assignedByProfessorId: plan.assignedByProfessorId || ""
     };
   }).filter((plan) => data.batches.some((batch) => batch.id === plan.batchId));
 }
@@ -1185,12 +1284,114 @@ function paperNoOptions() {
     .map((number) => `P${number}`);
 }
 
+function activeProgram() {
+  return programs[data.settings?.activeProgram] ? data.settings.activeProgram : "CMA India";
+}
+
+function levelsForProgram(program = activeProgram()) {
+  return programs[program] || programs["CMA India"];
+}
+
+function programForLevel(level) {
+  return levelsForProgram("CMA USA").includes(level) ? "CMA USA" : "CMA India";
+}
+
+function batchProgram(batch) {
+  return programForLevel(batch?.level);
+}
+
+function professorBelongsToProgram(professor, program = activeProgram()) {
+  const levels = Array.isArray(professor?.levels) ? professor.levels : [];
+  return levels.some((level) => levelsForProgram(program).includes(level));
+}
+
+function activeProgramBatches() {
+  return data.batches.filter((batch) => batchProgram(batch) === activeProgram());
+}
+
+function activeProgramProfessors() {
+  return data.professors.filter((professor) => professorBelongsToProgram(professor));
+}
+
+function activeProgramPaperNoOptions() {
+  const levels = levelsForProgram();
+  return [...new Set(allPapers()
+    .filter((paper) => levelsForPaper(paper).some((level) => levels.includes(level)))
+    .map((paper) => paperNumbers[paper])
+    .filter(Boolean))]
+    .sort((a, b) => a - b)
+    .map((number) => `P${number}`);
+}
+
+function cleanProfessorProgramMapping(professor) {
+  const indiaMaster = indiaProfessorMaster.get(professor.id);
+  if (indiaMaster) {
+    professor.levels = (professor.levels || []).filter((level) => programForLevel(level) === "CMA India");
+    professor.papers = (professor.papers || []).filter((paper) => levelsForPaper(paper).some((level) => programForLevel(level) === "CMA India"));
+    if (!professor.levels.length) professor.levels = [...indiaMaster.levels];
+    if (!professor.papers.length) professor.papers = [...indiaMaster.papers];
+    professor.headPaperNos = (professor.headPaperNos || []).filter((paperNo) => Number(paperNo) < 100);
+    return;
+  }
+
+  const hasUsaPaper = (professor.papers || []).some((paper) => levelsForPaper(paper).some((level) => programForLevel(level) === "CMA USA"));
+  if (!hasUsaPaper) {
+    professor.levels = (professor.levels || []).filter((level) => programForLevel(level) !== "CMA USA");
+    professor.headPaperNos = (professor.headPaperNos || []).filter((paperNo) => Number(paperNo) < 100);
+  }
+}
+
+function normalizeBatchProgram(batch) {
+  const subject = batch?.paper || "";
+  const subjectLevels = levelsForPaper(subject);
+  const hasUsaSubject = subjectLevels.some((level) => programForLevel(level) === "CMA USA");
+  if (!isCmaUsaText(batch?.name) && !hasUsaSubject) return batch;
+
+  const level = hasUsaSubject
+    ? subjectLevels.find((item) => programForLevel(item) === "CMA USA")
+    : cmaUsaLevelFromText(batch?.name);
+  const group = level === "CMA USA Part 2" ? "Part 2" : "Part 1";
+  const fallbackPaper = papersForLevel(level)[0];
+  batch.level = level;
+  batch.group = group;
+  batch.paper = hasUsaSubject ? subject : fallbackPaper;
+  batch.plannedHours = Number(batch.plannedHours || 0) > 0 ? batch.plannedHours : standardPlannedHours(level, group, batch.name);
+  batch.color = paletteForLevel(level).includes(batch.color) ? batch.color : defaultLevelColor(level);
+  return batch;
+}
+
+function paperCodeLabel(value) {
+  const number = Number(String(value).replace("P", ""));
+  if (number >= 101 && number <= 106) return `Part 1 Sec ${String.fromCharCode(64 + (number - 100))}`;
+  if (number >= 201 && number <= 206) return `Part 2 Sec ${String.fromCharCode(64 + (number - 200))}`;
+  return `P${number}`;
+}
+
+function paperCodeTitle(value) {
+  const number = Number(String(value).replace("P", ""));
+  return allPapers()
+    .filter((paper) => paperNumbers[paper] === number)
+    .map((paper) => paperShort(null, paper))
+    .join(", ") || paperCodeLabel(number);
+}
+
+function paperSectionTitle(value) {
+  const number = Number(String(value).replace("P", ""));
+  const paper = allPapers().find((item) => paperNumbers[item] === number);
+  if (!paper) return paperCodeLabel(value);
+  if (number >= 101 && number <= 206) {
+    const sectionName = paper.split(":").slice(1).join(":").trim();
+    return sectionName || paperCodeLabel(value);
+  }
+  return paperCodeTitle(value);
+}
+
 function papersForLevel(level) {
   return Object.values(cmaPapers[level] || {}).flat();
 }
 
 function paperNumber(level, paper) {
-  return paperNumbers[paper] ? `P${paperNumbers[paper]}` : "P?";
+  return paperNumbers[paper] ? paperCodeLabel(paperNumbers[paper]) : "P?";
 }
 
 function paperShort(level, paper) {
@@ -1212,6 +1413,8 @@ function levelCode(level) {
   if (level === "Foundation") return "CMAF";
   if (level === "Inter") return "CMAI";
   if (level === "Final") return "CMAFinal";
+  if (level === "CMA USA Part 1") return "CMAUSA_P1";
+  if (level === "CMA USA Part 2") return "CMAUSA_P2";
   return "CMA";
 }
 
@@ -1235,10 +1438,11 @@ function cellTint(color) {
 
 function inferProfessorLevels(professor) {
   const speciality = String(professor.speciality || "").toLowerCase();
+  if (speciality.includes("usa")) return levelsForProgram("CMA USA");
   if (speciality.includes("account")) return ["Foundation", "Inter"];
   if (speciality.includes("tax") || speciality.includes("cost")) return ["Inter", "Final"];
   if (speciality.includes("law")) return ["Foundation", "Inter", "Final"];
-  return Object.keys(cmaPapers);
+  return levelsForProgram("CMA India");
 }
 
 function inferProfessorPapers(professor) {
@@ -1246,6 +1450,24 @@ function inferProfessorPapers(professor) {
   const token = speciality.split(/\s|,/).find(Boolean);
   const matches = token ? allPapers().filter((paper) => paper.toLowerCase().includes(token)) : [];
   return matches.length ? matches : allPapers();
+}
+
+function professorFirstNameCredential(name) {
+  return cleanSheetText(String(name || "").split(/\s+/).find(Boolean) || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "") || "professor";
+}
+
+function oldAutoProfessorPassword(professor) {
+  return `cma${String(professor.id || slug(professor.name)).replace(/[^a-z0-9]/gi, "").slice(0, 4)}`;
+}
+
+function isOldAutoProfessorLogin(professor) {
+  return !professor.loginId || professor.loginId === professor.id || professor.loginId === slug(professor.name);
+}
+
+function isOldAutoProfessorPassword(professor) {
+  return !professor.loginPassword || professor.loginPassword === oldAutoProfessorPassword(professor);
 }
 
 function saveData(options = {}) {
@@ -1281,11 +1503,11 @@ function loggedInProfessorId() {
 }
 
 function professorLoginId(professor) {
-  return cleanSheetText(professor.loginId || professor.id || slug(professor.name));
+  return cleanSheetText(professor.loginId || professorFirstNameCredential(professor.name));
 }
 
 function professorPassword(professor) {
-  return cleanSheetText(professor.loginPassword || `cma${String(professor.id || slug(professor.name)).replace(/[^a-z0-9]/gi, "").slice(0, 4)}`);
+  return cleanSheetText(professor.loginPassword || professorFirstNameCredential(professor.name));
 }
 
 function professorLoginShareMessage(professor) {
@@ -1318,6 +1540,32 @@ function setActiveView(viewName) {
   $$(".view").forEach((view) => view.classList.remove("active"));
   $(`#${viewName}View`)?.classList.add("active");
   updateFilterVisibility(viewName);
+}
+
+function renderProgramSwitch() {
+  const program = activeProgram();
+  document.body.dataset.program = program === "CMA USA" ? "usa" : "india";
+  $$("[data-program]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.program === program);
+  });
+  const subtitle = $("#programSubtitle");
+  if (subtitle) {
+    subtitle.textContent = program === "CMA USA"
+      ? "CMA USA Part 1 and Part 2 timetable, faculty allocation, and progress control."
+      : "CMA India Foundation, Inter, and Final timetable, faculty allocation, and syllabus completion control.";
+  }
+}
+
+function setActiveProgram(program) {
+  if (!programs[program] || activeProgram() === program) return;
+  data.settings.activeProgram = program;
+  renderProgramSwitch();
+  ["centreFilter", "attemptFilter", "levelFilter", "professorFilter"].forEach((id) => {
+    const select = $(`#${id}`);
+    if (select) select.value = "All";
+  });
+  localStorage.setItem(storeKey, JSON.stringify(data));
+  setTimeout(render, 0);
 }
 
 function applyAccessMode() {
@@ -1823,7 +2071,7 @@ function filteredBatches() {
   const centre = $("#centreFilter").value;
   const attempt = $("#attemptFilter").value;
   const level = $("#levelFilter").value;
-  return data.batches.filter((batch) =>
+  return activeProgramBatches().filter((batch) =>
     (centre === "All" || batch.centre === centre) &&
     (attempt === "All" || batch.attempt === attempt) &&
     (level === "All" || batch.level === level)
@@ -1863,9 +2111,11 @@ function renderFilters() {
   const timeSlots = selectedValues($("#timeSlotFilter"));
   const days = selectedValues($("#dayFilter"));
   const professor = $("#professorFilter").value || "All";
+  const batches = activeProgramBatches();
+  const professors = activeProgramProfessors();
   setOptions($("#centreFilter"), data.centres, centre, true);
-  setOptions($("#attemptFilter"), [...new Set(data.batches.map((b) => b.attempt))].sort(), attempt, true);
-  setOptions($("#levelFilter"), Object.keys(cmaPapers), level, true);
+  setOptions($("#attemptFilter"), [...new Set(batches.map((b) => b.attempt))].sort(), attempt, true);
+  setOptions($("#levelFilter"), levelsForProgram(), level, true);
   setMultiOptions($("#timeSlotFilter"), allKnownTimeSlots().map((slot) => `${slot.start}|${slot.end}`), timeSlots.length ? timeSlots : ["All"], true);
   const selectedDays = days.length ? days : ["All"];
   $("#dayFilter").innerHTML = dayFilterOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${selectedDays.includes(option.value) ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
@@ -1873,7 +2123,7 @@ function renderFilters() {
   if (alertTypeFilter && !alertTypeFilter.options.length) {
     alertTypeFilter.innerHTML = alertFilterOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === "All" ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
   }
-  setOptions($("#professorFilter"), data.professors.map((item) => item.id), professor, true);
+  setOptions($("#professorFilter"), professors.map((item) => item.id), professor, true);
   renderGoogleSheetLinkField();
   Array.from($("#professorFilter").options).forEach((option) => {
     if (option.value !== "All") option.textContent = professorName(option.value);
@@ -1899,11 +2149,12 @@ function renderDashboard() {
   const risk = metrics.filter((m) => m.color === "red").length;
   const avgCompletion = metrics.length ? metrics.reduce((sum, item) => sum + item.completionPercent, 0) / metrics.length : 0;
   const facultySessions = data.slots.filter((slot) => batchIds.includes(slot.batchId) && slotProfessorId(slot)).length;
-  const levelCounts = Object.keys(cmaPapers).map((level) => `${level}: ${batches.filter((batch) => batch.level === level).length}`).join(" | ");
+  const levelCounts = levelsForProgram().map((level) => `${level}: ${batches.filter((batch) => batch.level === level).length}`).join(" | ");
+  const levelKpiLabel = activeProgram() === "CMA USA" ? "Part 1 / Part 2" : "Foundation / Inter / Final";
 
   $("#kpiGrid").innerHTML = [
     ["Active Batches", batches.length, levelCounts, "brand"],
-    ["Foundation / Inter / Final", levelCounts, "Active batches by level", "blue"],
+    [levelKpiLabel, levelCounts, "Active batches by level", "blue"],
     ["Active Month Total Hrs", activeMonthHours.toFixed(1), `${month.from} to ${month.to}`, "green"],
     ["Active Week Total Hrs", activeWeekHours.toFixed(1), `${selectedWeekStart} to ${weekEnd}`, "gold"],
     ["Avg Syllabus Completed", `${avgCompletion.toFixed(1)}%`, "Across selected batches", "green"],
@@ -2050,7 +2301,7 @@ function selectField(name, label, options, value = "") {
 }
 
 function professorOptionsForLevel(level) {
-  return data.professors
+  return activeProgramProfessors()
     .filter((professor) => professor.levels.includes(level))
     .map((professor) => ({ value: professor.id, label: professor.name }));
 }
@@ -2060,7 +2311,7 @@ function multiSelectField(name, label, options, values = []) {
 }
 
 function renderForms() {
-  const batchOptions = data.batches.map((batch) => ({ value: batch.id, label: `${batch.name} (${batch.centre})` }));
+  const batchOptions = activeProgramBatches().map((batch) => ({ value: batch.id, label: `${batch.name} (${batch.centre})` }));
 
   if ($("#slotForm")) {
     $("#slotForm").innerHTML = [
@@ -2084,10 +2335,12 @@ function renderForms() {
     ].join("");
   }
 
+  const defaultLevel = activeProgram() === "CMA USA" ? "CMA USA Part 1" : "Foundation";
+  const defaultAttempt = activeProgram() === "CMA USA" ? "CMA USA" : "Dec 2026";
   $("#batchForm").innerHTML = [
-    `<input name="level" type="hidden" value="Foundation">`,
-    `<label><span>Level</span><input value="Foundation" disabled></label>`,
-    field("attempt", "Attempt", "text", "Dec 2026", "required"),
+    `<input name="level" type="hidden" value="${escapeHtml(defaultLevel)}">`,
+    `<label><span>Level</span><input value="${escapeHtml(defaultLevel)}" disabled></label>`,
+    field("attempt", "Attempt", "text", defaultAttempt, "required"),
     selectField("centre", "Mumbai Centre", data.centres),
     field("section", "Batch No / Extra Name", "text", "", "placeholder=\"e.g. Morning, Evening, B2\""),
     field("plannedHours", "Standard Hours", "number", "60", "min=\"1\" required"),
@@ -2112,7 +2365,7 @@ function renderDailyTimetable() {
   const selectedDate = dateInput.value;
   const selectedDailyLevel = $("#dailyLevelFilter").value || "All";
   const selectedDailyCentre = $("#dailyCentreFilter").value || "All";
-  setOptions($("#dailyLevelFilter"), Object.keys(cmaPapers), selectedDailyLevel, true);
+  setOptions($("#dailyLevelFilter"), levelsForProgram(), selectedDailyLevel, true);
   setOptions($("#dailyCentreFilter"), data.centres, selectedDailyCentre, true);
   const selectedProfessor = $("#professorFilter").value || "All";
   const rows = data.slots
@@ -2166,7 +2419,7 @@ function renderTables() {
   }
 
   const masterBatches = filteredBatches();
-  $("#masterBatchCount").textContent = `${masterBatches.length} of ${data.batches.length} batches`;
+  $("#masterBatchCount").textContent = `${masterBatches.length} of ${activeProgramBatches().length} ${activeProgram()} batches`;
   $("#masterBatchTable").innerHTML = masterBatches.map((batch) => `<tr>
     <td><strong>${escapeHtml(batch.name)}</strong></td>
     <td>${escapeHtml(batch.level)}</td>
@@ -2193,22 +2446,30 @@ function renderTables() {
 
 function renderProfessorManagement() {
   if (!$("#professorManagementTable")) return;
-  const paperNos = paperNoOptions();
-  const selectedLevel = $("#professorManagementLevel")?.value || "Foundation";
-  const selectedPaper = $("#professorManagementPaper")?.value || "P1";
-  setOptions($("#professorManagementLevel"), Object.keys(cmaPapers), selectedLevel);
-  setOptions($("#professorManagementPaper"), paperNos, selectedPaper);
+  const paperNos = activeProgramPaperNoOptions();
+  const paperNoLabel = (paperNo) => {
+    return `${paperCodeLabel(paperNo)} | ${paperSectionTitle(paperNo)}`;
+  };
+  const isUsaProgram = activeProgram() === "CMA USA";
+  const headHeader = $("#headPaperHeader");
+  if (headHeader) headHeader.textContent = isUsaProgram ? "Head Section" : "Head Papers";
+  const selectedLevel = $("#professorManagementLevel")?.value || levelsForProgram()[0];
+  const selectedPaper = $("#professorManagementPaper")?.value || paperNos[0] || "P1";
+  setOptions($("#professorManagementLevel"), levelsForProgram(), selectedLevel);
+  $("#professorManagementPaper").innerHTML = paperNos.map((paperNo) =>
+    `<option value="${escapeHtml(paperNo)}" ${paperNo === selectedPaper ? "selected" : ""}>${escapeHtml(paperNoLabel(paperNo))}</option>`
+  ).join("");
   $("[data-professor-view].active")?.classList.remove("active");
   $(`[data-professor-view="${professorManagementView}"]`)?.classList.add("active");
   $("#professorManagementLevel").disabled = professorManagementView !== "level";
   $("#professorManagementPaper").disabled = professorManagementView !== "paper";
   $("#professorManagementForm").innerHTML = [
     field("name", "New Professor Name", "text", "", "placeholder=\"Prof Name\" required"),
-    `<label><span>Levels</span><select name="levels" multiple>${Object.keys(cmaPapers).map((option) => `<option value="${escapeHtml(option)}" selected>${escapeHtml(option)}</option>`).join("")}</select></label>`,
-    `<label><span>Paper Nos.</span><select name="paperNos" multiple>${paperNos.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}</select></label>`,
+    `<label><span>Levels</span><select name="levels" multiple>${levelsForProgram().map((option) => `<option value="${escapeHtml(option)}" selected>${escapeHtml(option)}</option>`).join("")}</select></label>`,
+    `<label><span>Paper / Section</span><select name="paperNos" multiple>${paperNos.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(paperCodeLabel(option))}</option>`).join("")}</select></label>`,
     `<div class="row-actions professor-add-actions"><button type="submit">Add Professor</button></div>`
   ].join("");
-  const visibleProfessors = data.professors.filter((professor) => {
+  const visibleProfessors = activeProgramProfessors().filter((professor) => {
     if (professorManagementView === "level") return (professor.levels || []).includes($("#professorManagementLevel").value);
     if (professorManagementView === "paper") {
       const paperNo = Number($("#professorManagementPaper").value.replace("P", ""));
@@ -2217,17 +2478,12 @@ function renderProfessorManagement() {
     return true;
   });
   $("#professorManagementTable").innerHTML = visibleProfessors.map((professor) => {
-    const selectedPaperNos = [...new Set((professor.papers || []).map((paper) => paperNumbers[paper]).filter(Boolean))]
+    const programPapers = (professor.papers || []).filter((paper) =>
+      levelsForPaper(paper).some((level) => levelsForProgram().includes(level))
+    );
+    const selectedPaperNos = [...new Set(programPapers.map((paper) => paperNumbers[paper]).filter(Boolean))]
       .map((number) => `P${number}`);
-    const paperNoLabel = (paperNo) => {
-      const number = Number(String(paperNo).replace("P", ""));
-      const subjects = allPapers()
-        .filter((paper) => paperNumbers[paper] === number)
-        .map((paper) => paperShort(null, paper))
-        .join(", ");
-      return subjects ? `${paperNo} | ${subjects}` : paperNo;
-    };
-    const mappedPaperChips = (professor.papers || [])
+    const mappedPaperChips = programPapers
       .map((paper) => `<span class="paper-chip" style="background:${escapeHtml(cellTint(professor.color || professorColor(professor.id)))}">${escapeHtml(paperShort(null, paper))}</span>`)
       .join("");
     return `<tr data-professor-row="${escapeHtml(professor.id)}">
@@ -2237,13 +2493,25 @@ function renderProfessorManagement() {
       </td>
       <td>
         <select multiple data-professor-levels="${escapeHtml(professor.id)}">
-          ${Object.keys(cmaPapers).map((level) => `<option value="${escapeHtml(level)}" ${(professor.levels || []).includes(level) ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}
+          ${levelsForProgram().map((level) => `<option value="${escapeHtml(level)}" ${(professor.levels || []).includes(level) ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}
         </select>
       </td>
       <td>
         <select multiple data-professor-paper-nos="${escapeHtml(professor.id)}">
           ${paperNos.map((paperNo) => `<option value="${escapeHtml(paperNo)}" ${selectedPaperNos.includes(paperNo) ? "selected" : ""}>${escapeHtml(paperNoLabel(paperNo))}</option>`).join("")}
         </select>
+      </td>
+      <td>
+        ${isUsaProgram ? `<span class="muted">Not used for CMA USA</span><div class="head-paper-grid hidden" data-professor-head-paper-nos="${escapeHtml(professor.id)}"></div>` : `<div class="head-paper-grid" data-professor-head-paper-nos="${escapeHtml(professor.id)}">
+          ${paperNos.map((paperNo) => {
+            const number = Number(String(paperNo).replace("P", ""));
+            const selected = (professor.headPaperNos || []).includes(number);
+            return `<label class="head-paper-chip ${selected ? "selected" : ""}" title="${escapeHtml(paperNoLabel(paperNo))}">
+              <input type="checkbox" value="${escapeHtml(paperNo)}" ${selected ? "checked" : ""}>
+              <span>${escapeHtml(paperCodeLabel(paperNo))}</span>
+            </label>`;
+          }).join("")}
+        </div>`}
       </td>
       <td><div class="paper-chip-list">${mappedPaperChips || `<span class="muted">No papers mapped</span>`}</div></td>
       <td><input data-professor-login-id="${escapeHtml(professor.id)}" value="${escapeHtml(professorLoginId(professor))}"></td>
@@ -2256,7 +2524,7 @@ function renderProfessorManagement() {
         </div>
       </td>
     </tr>`;
-  }).join("") || `<tr><td colspan="7" class="empty">No faculty found for this view.</td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty">No faculty found for this view.</td></tr>`;
 }
 
 function slotsForCurrentWeek({ applyWeeklyFilters = true } = {}) {
@@ -2463,7 +2731,8 @@ function professorShareMessage(professorId) {
 }
 
 function renderSharePanels() {
-  const batches = [...data.batches].sort((a, b) => a.name.localeCompare(b.name));
+  const batches = [...activeProgramBatches()].sort((a, b) => a.name.localeCompare(b.name));
+  const professors = activeProgramProfessors();
   const batchSelect = $("#batchShareSelect");
   const professorSelect = $("#professorShareSelect");
   const currentBatch = batchSelect.value;
@@ -2472,8 +2741,8 @@ function renderSharePanels() {
   batchSelect.innerHTML = batches.map((batch) => `<option value="${escapeHtml(batch.id)}">${escapeHtml(batch.name)}</option>`).join("");
   if (batches.some((batch) => batch.id === currentBatch)) batchSelect.value = currentBatch;
 
-  professorSelect.innerHTML = data.professors.map((professor) => `<option value="${escapeHtml(professor.id)}">${escapeHtml(professor.name)}</option>`).join("");
-  if (data.professors.some((professor) => professor.id === currentProfessor)) professorSelect.value = currentProfessor;
+  professorSelect.innerHTML = professors.map((professor) => `<option value="${escapeHtml(professor.id)}">${escapeHtml(professor.name)}</option>`).join("");
+  if (professors.some((professor) => professor.id === currentProfessor)) professorSelect.value = currentProfessor;
 
   $("#batchShareText").value = batchShareMessage(batchSelect.value);
   $("#professorShareText").value = professorShareMessage(professorSelect.value);
@@ -2527,12 +2796,188 @@ function plannedTopicLabel(plan) {
   const available = timetableHoursForAllocation(plan);
   const actualGiven = actualHoursForTopicPlan(plan);
   const pending = Math.max(0, Number(plan.allocatedHours || 0) - actualGiven);
-  return `P${topic.paperNo} | ${topic.chapterName} | Alloc ${Number(plan.allocatedHours || 0).toFixed(1)} | Available ${available.toFixed(1)} | Actual ${actualGiven.toFixed(1)} | Balance ${pending.toFixed(1)}`;
+  return `P${topic.paperNo} | ${topic.chapterName} | ${topicAssignmentLabel(plan)} | Alloc ${Number(plan.allocatedHours || 0).toFixed(1)} | Available ${available.toFixed(1)} | Actual ${actualGiven.toFixed(1)} | Balance ${pending.toFixed(1)}`;
 }
 
 function plannedTopicText(plan) {
   const topic = topicById(plan.topicId);
   return topic ? `P${topic.paperNo} ${topic.chapterName}` : "";
+}
+
+function topicAssignmentLabel(plan) {
+  if (plan.assignedByRole === "head") return `Head Assigned by ${professorName(plan.assignedByProfessorId)}`;
+  if (plan.assignedByRole === "professor") return "Professor Assigned";
+  return "TT Head Assigned";
+}
+
+function topicAssignmentBadge(plan) {
+  const label = topicAssignmentLabel(plan);
+  const tone = plan.assignedByRole === "head" ? "blue" : plan.assignedByRole === "professor" ? "green" : "yellow";
+  return statusBadge(label, tone);
+}
+
+function paperNameByNo(paperNo) {
+  return allPapers().find((paper) => paperNumbers[paper] === Number(paperNo)) || "Paper";
+}
+
+function professorTopicAssignmentCombos(professorId) {
+  const seen = new Set();
+  const headPaperNos = (data.professors.find((professor) => professor.id === professorId)?.headPaperNos || []).map(Number);
+  return data.slots
+    .filter((slot) => {
+      if (slot.noLecture) return false;
+      const paperNo = paperNumbers[slotSubject(slot)];
+      return slotProfessorId(slot) === professorId || headPaperNos.includes(Number(paperNo));
+    })
+    .map((slot) => {
+      const batch = batchById(slot.batchId);
+      const paperNo = paperNumbers[slotSubject(slot)];
+      if (!batch || !paperNo) return null;
+      const key = `${batch.id}|${paperNo}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return {
+        key,
+        batchId: batch.id,
+        paperNo,
+        label: `${batch.name} | ${batch.centre} | P${paperNo} ${paperNameByNo(paperNo)}`
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function topicPlanOwner(batchId, topicId) {
+  return data.topicPlans.find((plan) => plan.batchId === batchId && plan.topicId === topicId);
+}
+
+function professorIsSubjectHead(professorId, paperNo) {
+  const professor = data.professors.find((item) => item.id === professorId);
+  return Boolean(professor && (professor.headPaperNos || []).map(Number).includes(Number(paperNo)));
+}
+
+function eligibleProfessorsForBatchPaper(batchId, paperNo) {
+  const batch = batchById(batchId);
+  const paper = paperNameByNo(paperNo);
+  const assignedIds = new Set(data.slots
+    .filter((slot) => slot.batchId === batchId)
+    .filter((slot) => paperNumbers[slotSubject(slot)] === Number(paperNo))
+    .map((slot) => slotProfessorId(slot))
+    .filter(Boolean));
+  return data.professors
+    .filter((professor) =>
+      assignedIds.has(professor.id) ||
+      ((professor.levels || []).includes(batch?.level) && (professor.papers || []).includes(paper))
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderProfessorSelfTopicForm(professorId) {
+  const form = $("#professorSelfTopicForm");
+  if (!form) return;
+  const combos = professorTopicAssignmentCombos(professorId);
+  if (!combos.length) {
+    form.innerHTML = `<div class="empty wide">No assigned timetable lecture found yet. Topic selection opens after this professor is assigned in Weekly Timetable.</div>`;
+    return;
+  }
+  const currentComboKey = form.elements?.comboKey?.value || combos[0].key;
+  const selectedCombo = combos.find((combo) => combo.key === currentComboKey) || combos[0];
+  const topics = topicMaster.filter((topic) => topic.paperNo === selectedCombo.paperNo);
+  const isHead = professorIsSubjectHead(professorId, selectedCombo.paperNo);
+  const targetProfessorId = isHead
+    ? (form.elements?.targetProfessorId?.value || professorId)
+    : professorId;
+  const targetProfessor = data.professors.find((professor) => professor.id === targetProfessorId) || data.professors.find((professor) => professor.id === professorId);
+  const timetableHours = timetableHoursForAllocation({
+    professorId: targetProfessor?.id || professorId,
+    batchId: selectedCombo.batchId,
+    paperNo: selectedCombo.paperNo
+  });
+  const ownPlans = data.topicPlans.filter((plan) =>
+    plan.professorId === (targetProfessor?.id || professorId) &&
+    plan.batchId === selectedCombo.batchId &&
+    paperForPlan(plan) === selectedCombo.paperNo
+  );
+  const ownTopicIds = new Set(ownPlans.map((plan) => plan.topicId));
+  const ownHours = ownPlans.reduce((sum, plan) => sum + Number(plan.allocatedHours || 0), 0);
+  const targetOptions = isHead
+    ? eligibleProfessorsForBatchPaper(selectedCombo.batchId, selectedCombo.paperNo)
+    : [];
+  form.innerHTML = [
+    selectField("comboKey", "Batch / Paper", combos.map((combo) => ({ value: combo.key, label: combo.label })), selectedCombo.key),
+    isHead ? selectField("targetProfessorId", "Assign Topics To", targetOptions.map((professor) => ({ value: professor.id, label: professor.name })), targetProfessor?.id || professorId) : "",
+    `<div class="self-topic-summary">
+      <strong>${ownHours.toFixed(1)} hrs selected</strong>
+      <span>${timetableHours.toFixed(1)} timetable hrs available for ${escapeHtml(targetProfessor?.name || "this professor")}</span>
+    </div>`,
+    `<div class="topic-checklist self-topic-list wide">
+      ${topics.map((topic) => {
+        const owner = topicPlanOwner(selectedCombo.batchId, topic.id);
+        const ownedByOther = owner && owner.professorId !== (targetProfessor?.id || professorId);
+        const ownerName = ownedByOther ? professorName(owner.professorId) : "";
+        const checked = ownTopicIds.has(topic.id);
+        return `<label class="topic-check ${ownedByOther ? "locked-topic" : ""}">
+          <input name="topicIds" type="checkbox" value="${escapeHtml(topic.id)}" ${checked ? "checked" : ""} ${ownedByOther ? "disabled" : ""}>
+          <span>P${topic.paperNo} | ${escapeHtml(topic.chapterName)}${ownedByOther ? ` | Taken by ${escapeHtml(ownerName)}` : ""}</span>
+          <input class="topic-hours" name="topicHours_${escapeHtml(topic.id)}" type="number" min="0" step="0.5" value="${Number(owner?.allocatedHours || topic.standardHours || 0).toFixed(1)}" ${ownedByOther ? "disabled" : ""}>
+        </label>`;
+      }).join("") || `<div class="empty">No topics found for this paper.</div>`}
+    </div>`,
+    `<div class="row-actions wide"><button type="submit">Save My Topic Selection</button></div>`
+  ].join("");
+}
+
+function saveProfessorSelfTopicSelection(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const professorId = loggedInProfessorId() || $("#professorLoginSelect")?.value || "";
+  const combo = professorTopicAssignmentCombos(professorId).find((item) => item.key === form.elements.comboKey.value);
+  if (!professorId || !combo) return;
+  const isHead = professorIsSubjectHead(professorId, combo.paperNo);
+  const targetProfessorId = isHead ? (form.elements.targetProfessorId?.value || professorId) : professorId;
+  const selectedTopicIds = new Set(Array.from(form.querySelectorAll('input[name="topicIds"]:checked')).map((input) => input.value));
+
+  selectedTopicIds.forEach((topicId) => {
+    const topic = topicById(topicId);
+    if (!topic) return;
+    const existingOwner = topicPlanOwner(combo.batchId, topicId);
+    if (existingOwner && existingOwner.professorId !== targetProfessorId) return;
+    const existingOwn = data.topicPlans.find((plan) =>
+      plan.professorId === targetProfessorId &&
+      plan.batchId === combo.batchId &&
+      plan.topicId === topicId
+    );
+    const hours = Number(form.elements[`topicHours_${topicId}`]?.value || topic.standardHours || 0);
+    const payload = {
+      professorId: targetProfessorId,
+      batchId: combo.batchId,
+      slotId: "",
+      topicId,
+      paperNo: topic.paperNo,
+      weekStart: selectedWeekStart,
+      allocatedHours: hours,
+      givenHours: existingOwn ? Number(existingOwn.givenHours || 0) : 0,
+      selfAssigned: targetProfessorId === professorId,
+      assignedByProfessorId: professorId,
+      assignedByRole: targetProfessorId === professorId ? "professor" : "head"
+    };
+    if (existingOwn) Object.assign(existingOwn, payload);
+    else data.topicPlans.push({ id: uid("tp"), ...payload });
+  });
+
+  data.topicPlans = data.topicPlans.filter((plan) =>
+    !(plan.professorId === targetProfessorId &&
+      plan.batchId === combo.batchId &&
+      paperForPlan(plan) === combo.paperNo &&
+      (plan.selfAssigned || plan.assignedByProfessorId === professorId) &&
+      !selectedTopicIds.has(plan.topicId))
+  );
+
+  saveData();
+  renderProfessorSelfTopicForm(professorId);
+  renderProfessorPlanning();
+  renderSharePanels();
+  if (isProfessorMode() && cloudSyncUrl()) saveCloudData({ silent: true });
 }
 
 function slotHoursById(slotId) {
@@ -2675,7 +3120,7 @@ function renderProfessorMonthlySummary() {
   if (monthInput) monthInput.value = range.month;
   const map = new Map();
 
-  data.professors.forEach((professor) => {
+  activeProgramProfessors().forEach((professor) => {
     if (selectedLevel !== "All" && !(professor.levels || []).includes(selectedLevel)) return;
     if (selectedProfessor && professor.id !== selectedProfessor) return;
     map.set(professor.id, {
@@ -2753,7 +3198,7 @@ function renderProfessorMonthlySummary() {
 }
 
 function attemptsForLevel(level = "All") {
-  return [...new Set(data.batches
+  return [...new Set(activeProgramBatches()
     .filter((batch) => level === "All" || batch.level === level)
     .map((batch) => batch.attempt)
     .filter(Boolean))]
@@ -2762,7 +3207,7 @@ function attemptsForLevel(level = "All") {
 
 function fillLevelSelect(select, currentValue = "", includeAll = false) {
   if (!select) return;
-  const levels = includeAll ? ["All", ...Object.keys(cmaPapers)] : Object.keys(cmaPapers);
+  const levels = includeAll ? ["All", ...levelsForProgram()] : levelsForProgram();
   const selected = levels.includes(currentValue) ? currentValue : levels[0];
   select.innerHTML = levels.map((level) => `<option value="${escapeHtml(level)}" ${level === selected ? "selected" : ""}>${escapeHtml(level === "All" ? "All Levels" : level)}</option>`).join("");
 }
@@ -2848,7 +3293,7 @@ function renderProfessorPlanning() {
 
   fillLevelSelect(levelSelect, currentLevel, false);
   fillAttemptSelect(attemptSelect, levelSelect.value, currentAttempt);
-  const levelProfessors = data.professors.filter((professor) => professor.levels.includes(levelSelect.value));
+  const levelProfessors = activeProgramProfessors().filter((professor) => professor.levels.includes(levelSelect.value));
   professorSelect.innerHTML = levelProfessors.map((professor) => `<option value="${escapeHtml(professor.id)}">${escapeHtml(professor.name)}</option>`).join("");
   if (levelProfessors.some((professor) => professor.id === currentProfessor)) professorSelect.value = currentProfessor;
   const professor = data.professors.find((item) => item.id === professorSelect.value);
@@ -2873,7 +3318,7 @@ function renderProfessorPlanning() {
   fillLevelSelect(summaryLevelSelect, summaryLevelSelect.value || levelSelect.value, true);
   if (summaryProfessorSelect) {
     const current = summaryProfessorSelect.value;
-    const summaryProfessors = data.professors.filter((item) => summaryLevelSelect.value === "All" || item.levels.includes(summaryLevelSelect.value));
+    const summaryProfessors = activeProgramProfessors().filter((item) => summaryLevelSelect.value === "All" || item.levels.includes(summaryLevelSelect.value));
     summaryProfessorSelect.innerHTML = summaryProfessors.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
     if (summaryProfessors.some((item) => item.id === current)) summaryProfessorSelect.value = current;
     else if (summaryProfessors.some((item) => item.id === professor?.id)) summaryProfessorSelect.value = professor.id;
@@ -2884,8 +3329,9 @@ function renderProfessorPlanning() {
 
   [timetableProfessorSelect, hoursProfessorSelect].forEach((select) => {
     const current = select.value;
-    select.innerHTML = data.professors.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
-    if (data.professors.some((item) => item.id === current)) select.value = current;
+    const professors = activeProgramProfessors();
+    select.innerHTML = professors.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+    if (professors.some((item) => item.id === current)) select.value = current;
     else if (professor?.id) select.value = professor.id;
   });
   const timetableProfessor = data.professors.find((item) => item.id === timetableProfessorSelect.value);
@@ -3015,11 +3461,11 @@ function renderTopicPlanner() {
     <td>${escapeHtml(row.branch)}</td>
     <td>${escapeHtml(row.level)}</td>
     <td>${escapeHtml(row.attempt)}</td>
-    <td>${escapeHtml(row.professorName)}</td>
-    <td>${escapeHtml(row.paper)}</td>
-    <td>${row.allocatedHours.toFixed(1)}</td>
-    <td>${available.toFixed(1)}</td>
-    <td>${row.hasDummy ? dummyBadge({ dummyData: dummyReportTag }) : ""} ${status}</td>
+      <td>${escapeHtml(row.professorName)}</td>
+      <td>${escapeHtml(row.paper)}</td>
+      <td>${row.allocatedHours.toFixed(1)}</td>
+      <td>${available.toFixed(1)}</td>
+    <td>${row.assignmentTags} ${row.hasDummy ? dummyBadge({ dummyData: dummyReportTag }) : ""} ${status}</td>
   </tr>`;
   }).join("") || `<tr><td colspan="9" class="empty">No syllabus allocation saved for ${escapeHtml(professor.name)}.</td></tr>`;
 
@@ -3058,13 +3504,18 @@ function professorSyllabusAllocationRows(professorId, selectedPaper = "All", sel
         paperNo: topic.paperNo,
         paper: `P${topic.paperNo} ${topic.paperName}`,
         allocatedHours: 0,
-        hasDummy: false
+        hasDummy: false,
+        assignmentTags: new Map()
       };
       current.allocatedHours += Number(plan.allocatedHours || 0);
       current.hasDummy = current.hasDummy || isDummy(plan);
+      current.assignmentTags.set(topicAssignmentLabel(plan), topicAssignmentBadge(plan));
       map.set(key, current);
     });
-  return Array.from(map.values()).sort((a, b) => `${a.batchName} ${a.paper}`.localeCompare(`${b.batchName} ${b.paper}`));
+  return Array.from(map.values()).map((row) => ({
+    ...row,
+    assignmentTags: Array.from(row.assignmentTags.values()).join(" ")
+  })).sort((a, b) => `${a.batchName} ${a.paper}`.localeCompare(`${b.batchName} ${b.paper}`));
 }
 
 function renderProfessorTimetableReport() {
@@ -3270,10 +3721,11 @@ function renderProfessorLogin() {
   const professorSelect = $("#professorLoginSelect");
   const fixedProfessorId = loggedInProfessorId();
   const currentProfessor = professorSelect.value;
-  professorSelect.innerHTML = data.professors.map((professor) => `<option value="${escapeHtml(professor.id)}">${escapeHtml(professor.name)}</option>`).join("");
-  if (fixedProfessorId && data.professors.some((professor) => professor.id === fixedProfessorId)) professorSelect.value = fixedProfessorId;
-  if (data.professors.some((professor) => professor.id === currentProfessor)) professorSelect.value = currentProfessor;
-  if (fixedProfessorId && data.professors.some((professor) => professor.id === fixedProfessorId)) professorSelect.value = fixedProfessorId;
+  const loginProfessors = fixedProfessorId ? data.professors.filter((professor) => professor.id === fixedProfessorId) : activeProgramProfessors();
+  professorSelect.innerHTML = loginProfessors.map((professor) => `<option value="${escapeHtml(professor.id)}">${escapeHtml(professor.name)}</option>`).join("");
+  if (fixedProfessorId && loginProfessors.some((professor) => professor.id === fixedProfessorId)) professorSelect.value = fixedProfessorId;
+  if (loginProfessors.some((professor) => professor.id === currentProfessor)) professorSelect.value = currentProfessor;
+  if (fixedProfessorId && loginProfessors.some((professor) => professor.id === fixedProfessorId)) professorSelect.value = fixedProfessorId;
   professorSelect.disabled = Boolean(fixedProfessorId);
   if ($("#professorLoginWeek")) $("#professorLoginWeek").value = selectedWeekStart;
 
@@ -3333,6 +3785,7 @@ function renderProfessorLogin() {
       <td><button class="tiny danger" data-delete-actual="${escapeHtml(entry.id)}" type="button">Delete</button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="10" class="empty">No actual lecture submitted by this professor yet.</td></tr>`;
+  renderProfessorSelfTopicForm(professorId);
 }
 
 function renderWeeklyInsights(dates, visibleBatches, activeTimeSlots) {
@@ -3406,31 +3859,44 @@ function renderWeeklyTable() {
       weeklyTable.style.minWidth = `${104 + 184 + (visibleBatches.length * columnWidth)}px`;
   }
   renderWeeklyInsights(dates, visibleBatches, activeTimeSlots);
+  const slotsByCell = new Map(data.slots.map((slot) => [`${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`, slot]));
+  const activeProfessors = activeProgramProfessors();
+  const professorOptionsByLevel = new Map();
+  levelsForProgram().forEach((level) => {
+    const levelPapers = papersForLevel(level);
+    professorOptionsByLevel.set(level, activeProfessors
+      .filter((professor) => professor.levels.includes(level))
+      .flatMap((professor) => {
+        const papers = professor.papers.filter((paper) => levelPapers.includes(paper));
+        return (papers.length ? papers : []).map((paper) => ({
+          professorId: professor.id,
+          professorName: professor.name,
+          paper,
+          label: `${professor.name} : ${paperShort(level, paper)}`
+        }));
+      }));
+  });
   const assignmentOptions = (batch, date, timeSlot, currentSlot, selectedProfessorId = "", selectedSubject = "") => {
     const options = [
       `<option value="">Open</option>`,
       `<option value="__no_lecture__" ${currentSlot?.noLecture ? "selected" : ""}>No Lecture</option>`
     ];
-    data.professors
-      .filter((professor) => professor.levels.includes(batch.level))
-      .filter((professor) => professor.id === selectedProfessorId || professorIsAvailable(professor.id, date, timeSlot.start, timeSlot.end, currentSlot))
-      .forEach((professor) => {
-        const papers = professor.papers.filter((paper) => papersForLevel(batch.level).includes(paper));
-        (papers.length ? papers : [batch.paper]).forEach((paper) => {
-          const value = `${professor.id}||${paper}`;
-          const selected = professor.id === selectedProfessorId && paper === selectedSubject ? "selected" : "";
-          options.push(`<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(`${professor.name} : ${paperShort(batch.level, paper)}`)}</option>`);
-        });
+    const candidateSlots = data.slots.filter((slot) =>
+      slot.id !== currentSlot?.id &&
+      slot.date === date &&
+      slotsOverlap({ date, start: timeSlot.start, end: timeSlot.end }, slot)
+    );
+    (professorOptionsByLevel.get(batch.level) || [])
+      .filter((option) => option.professorId === selectedProfessorId || !candidateSlots.some((slot) => slotProfessorId(slot) === option.professorId))
+      .forEach((option) => {
+        const value = `${option.professorId}||${option.paper}`;
+        const selected = option.professorId === selectedProfessorId && option.paper === selectedSubject ? "selected" : "";
+        options.push(`<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(option.label)}</option>`);
       });
     return options.join("");
     };
 
-  const slotsForBoardCell = (batchId, date, timeSlot) => data.slots.find((item) =>
-    item.batchId === batchId &&
-    item.date === date &&
-    item.start === timeSlot.start &&
-    item.end === timeSlot.end
-  );
+  const slotsForBoardCell = (batchId, date, timeSlot) => slotsByCell.get(`${batchId}|${date}|${timeSlot.start}|${timeSlot.end}`);
 
   $("#weeklyHead").innerHTML = `<tr>
     <th class="weekly-date-col">Date</th>
@@ -3705,6 +4171,7 @@ function fixSheetTimeRange(start, end) {
 
 function rawLevelFromBatchName(batchName) {
   const text = String(batchName || "").toUpperCase();
+  if (isCmaUsaText(text)) return cmaUsaLevelFromText(text);
   if (text.includes("CMA FINAL")) return "Final";
   if (text.startsWith("CMAI")) return "Inter";
   return "Foundation";
@@ -3714,6 +4181,25 @@ function normalizeGoogleSubject(subjectText, batchName) {
   const text = cleanSheetText(subjectText).toLowerCase();
   const level = rawLevelFromBatchName(batchName);
   if (!text || text.includes("no lecture")) return "No Lecture";
+  if (level === "CMA USA Part 1" || level === "CMA USA Part 2") {
+    const part = level === "CMA USA Part 2" ? "Part 2" : "Part 1";
+    const sectionMatch = text.match(/section\s*([a-f])|\bsec\s*([a-f])|\b([a-f])\b/i);
+    const section = (sectionMatch?.[1] || sectionMatch?.[2] || sectionMatch?.[3] || "").toUpperCase();
+    const subject = papersForLevel(level).find((paper) => paper.includes(`${part} - Section ${section}`));
+    if (subject) return subject;
+    if (text.includes("external") || text.includes("financial reporting")) return "CMA USA Part 1 - Section A: External Financial Reporting Decisions";
+    if (text.includes("budget") || text.includes("forecast")) return "CMA USA Part 1 - Section B: Planning, Budgeting, and Forecasting";
+    if (text.includes("performance")) return level === "CMA USA Part 2" ? "CMA USA Part 2 - Section A: Financial Statement Analysis" : "CMA USA Part 1 - Section C: Performance Management";
+    if (text.includes("cost")) return "CMA USA Part 1 - Section D: Cost Management";
+    if (text.includes("control")) return "CMA USA Part 1 - Section E: Internal Controls";
+    if (text.includes("tech") || text.includes("analytics")) return "CMA USA Part 1 - Section F: Technology and Analytics";
+    if (text.includes("corporate finance")) return "CMA USA Part 2 - Section B: Corporate Finance";
+    if (text.includes("decision")) return "CMA USA Part 2 - Section C: Decision Analysis";
+    if (text.includes("risk")) return "CMA USA Part 2 - Section D: Risk Management";
+    if (text.includes("investment")) return "CMA USA Part 2 - Section E: Investment Decisions";
+    if (text.includes("ethic")) return "CMA USA Part 2 - Section F: Professional Ethics";
+    return papersForLevel(level)[0];
+  }
   if (level === "Foundation") {
     if (text.includes("account")) return "Fundamentals of Financial Accounting";
     if (text.includes("math") || text.includes("stat")) return "Fundamentals of Business Maths & Stats";
@@ -3756,6 +4242,7 @@ function googleSheetRowsToEntries(rows, range) {
       const date = parseSheetDate(row[offset]);
       const batchName = cleanSheetText(row[offset + 4]);
       if (!date || !isImportableSheetBatch(batchName)) return;
+      if (programForLevel(rawLevelFromBatchName(batchName)) !== activeProgram()) return;
       if (date < range.from || date > range.to) return;
       const fixedTime = fixSheetTimeRange(parseSheetTime(row[offset + 1]), parseSheetTime(row[offset + 2]));
       if (!fixedTime.start || !fixedTime.end) return;
@@ -3799,8 +4286,13 @@ function selectedGoogleSheetImportRange() {
 function clearTimetableForGoogleImport(range) {
   const removedSlotIds = new Set(data.slots
     .filter((slot) => slot.date >= range.from && slot.date <= range.to)
+    .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram())
     .map((slot) => slot.id));
-  data.slots = data.slots.filter((slot) => slot.date < range.from || slot.date > range.to);
+  data.slots = data.slots.filter((slot) =>
+    slot.date < range.from ||
+    slot.date > range.to ||
+    batchProgram(batchById(slot.batchId)) !== activeProgram()
+  );
   data.actualLectures = data.actualLectures.filter((entry) =>
     !removedSlotIds.has(entry.slotId) &&
     (entry.date < range.from || entry.date > range.to)
@@ -3815,6 +4307,7 @@ function applyGoogleSheetEntries(entries, range) {
   clearTimetableForGoogleImport(range);
   entries.forEach(([date, start, end, professorName, subject, rawBatchName, noLecture, importSource]) => {
     const batchMeta = importedBatchMeta(rawBatchName, subject);
+    if (programForLevel(batchMeta.level) !== activeProgram()) return;
     if (!data.batches.some((batch) => batch.id === batchMeta.id)) {
       data.batches.push({
         ...batchMeta,
@@ -4491,7 +4984,7 @@ function addProgress(event) {
 function addBatch(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const level = "Foundation";
+  const level = form.elements.level.value || (activeProgram() === "CMA USA" ? "CMA USA Part 1" : "Foundation");
   const attempt = form.elements.attempt.value.trim();
   const centre = form.elements.centre.value;
   const section = form.elements.section.value.trim();
@@ -4563,7 +5056,9 @@ function saveTopicPlan(event) {
       paperNo,
       weekStart,
       allocatedHours,
-      givenHours: existing ? Number(existing.givenHours || 0) : 0
+      givenHours: existing ? Number(existing.givenHours || 0) : 0,
+      assignedByRole: "tt-head",
+      assignedByProfessorId: ""
     };
     if (existing) {
       Object.assign(existing, payload);
@@ -4649,18 +5144,30 @@ function saveProfessorManagement(professorId) {
   const nameInput = $(`[data-professor-name="${CSS.escape(professorId)}"]`);
   const levelSelect = $(`[data-professor-levels="${CSS.escape(professorId)}"]`);
   const paperNoSelect = $(`[data-professor-paper-nos="${CSS.escape(professorId)}"]`);
+  const headPaperBox = $(`[data-professor-head-paper-nos="${CSS.escape(professorId)}"]`);
   const loginInput = $(`[data-professor-login-id="${CSS.escape(professorId)}"]`);
   const passwordInput = $(`[data-professor-password="${CSS.escape(professorId)}"]`);
   const selectedLevels = selectedValues(levelSelect);
   const selectedPaperNos = selectedValues(paperNoSelect).map((paperNo) => Number(paperNo.replace("P", "")));
+  const selectedHeadPaperNos = Array.from(headPaperBox?.querySelectorAll("input:checked") || []).map((input) => Number(input.value.replace("P", "")));
   professor.name = nameInput.value.trim() || professor.name;
   professor.loginId = loginInput.value.trim() || professorLoginId(professor);
   professor.loginPassword = passwordInput.value.trim() || professorPassword(professor);
-  professor.levels = selectedLevels.length ? selectedLevels : Object.keys(cmaPapers);
-  professor.papers = papersFromLevelsAndNos(professor.levels, selectedPaperNos);
-  if (!professor.papers.length) {
-    professor.papers = allPapers().filter((paper) => professor.levels.some((level) => papersForLevel(level).includes(paper)));
+  const otherProgramLevels = (professor.levels || []).filter((level) => !levelsForProgram().includes(level));
+  const programLevels = selectedLevels.length ? selectedLevels : levelsForProgram();
+  professor.levels = [...otherProgramLevels, ...programLevels];
+  const otherProgramPapers = (professor.papers || []).filter((paper) =>
+    !levelsForPaper(paper).some((level) => levelsForProgram().includes(level))
+  );
+  let programPapers = papersFromLevelsAndNos(programLevels, selectedPaperNos);
+  if (!programPapers.length) {
+    programPapers = allPapers().filter((paper) => programLevels.some((level) => papersForLevel(level).includes(paper)));
   }
+  professor.papers = [...otherProgramPapers, ...programPapers];
+  const otherHeadPaperNos = (professor.headPaperNos || []).filter((paperNo) =>
+    !activeProgramPaperNoOptions().includes(`P${Number(paperNo)}`)
+  );
+  professor.headPaperNos = activeProgram() === "CMA USA" ? otherHeadPaperNos : [...otherHeadPaperNos, ...selectedHeadPaperNos];
   saveData();
 }
 
@@ -4671,7 +5178,7 @@ function addProfessorFromManagement(event) {
   if (!name) return;
   const selectedLevels = selectedValues(form.elements.levels);
   const selectedPaperNos = selectedValues(form.elements.paperNos).map((paperNo) => Number(paperNo.replace("P", "")));
-  const levels = selectedLevels.length ? selectedLevels : Object.keys(cmaPapers);
+  const levels = selectedLevels.length ? selectedLevels : levelsForProgram();
   let papers = papersFromLevelsAndNos(levels, selectedPaperNos);
   if (!papers.length) {
     papers = allPapers().filter((paper) => levels.some((level) => papersForLevel(level).includes(paper)));
@@ -4683,8 +5190,9 @@ function addProfessorFromManagement(event) {
     home: "Online",
     levels,
     papers,
-    loginId: slug(name) || uid("login"),
-    loginPassword: `cma${String(slug(name) || Date.now()).slice(0, 4)}`,
+    headPaperNos: [],
+    loginId: professorFirstNameCredential(name),
+    loginPassword: professorFirstNameCredential(name),
     color: professorPalette[data.professors.length % professorPalette.length]
   });
   form.reset();
@@ -4722,6 +5230,10 @@ function updateFilterVisibility(viewName = document.querySelector(".tab.active")
 }
 
 function bindEvents() {
+  $$("[data-program]").forEach((button) => {
+    button.addEventListener("click", () => setActiveProgram(button.dataset.program));
+  });
+
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       $$(".tab").forEach((item) => item.classList.remove("active"));
@@ -4760,11 +5272,19 @@ function bindEvents() {
   $("#professorManagementForm").addEventListener("submit", addProfessorFromManagement);
   $("#professorManagementLevel").addEventListener("change", renderProfessorManagement);
   $("#professorManagementPaper").addEventListener("change", renderProfessorManagement);
+  $("#professorManagementTable").addEventListener("change", (event) => {
+    const chip = event.target.closest(".head-paper-chip");
+    if (chip) chip.classList.toggle("selected", event.target.checked);
+  });
   $("#topicPlanForm").addEventListener("submit", saveTopicPlan);
   $("#topicPlanForm").addEventListener("change", (event) => {
     if (["batchId", "paperNo"].includes(event.target.name)) renderTopicPlanner();
   });
   $("#professorActualForm").addEventListener("submit", saveActualLecture);
+  $("#professorSelfTopicForm")?.addEventListener("submit", saveProfessorSelfTopicSelection);
+  $("#professorSelfTopicForm")?.addEventListener("change", (event) => {
+    if (["comboKey", "targetProfessorId"].includes(event.target.name)) renderProfessorSelfTopicForm(loggedInProfessorId() || $("#professorLoginSelect")?.value || "");
+  });
   $("#batchShareSelect").addEventListener("change", renderSharePanels);
   $("#professorShareSelect").addEventListener("change", renderSharePanels);
   $("#professorAllocationLevel").addEventListener("change", renderProfessorPlanning);
@@ -5039,6 +5559,7 @@ function safeRenderStep(name, callback) {
 }
 
 function render() {
+  safeRenderStep("Program switch", renderProgramSwitch);
   safeRenderStep("Filter visibility", updateFilterVisibility);
   safeRenderStep("Filters", renderFilters);
   safeRenderStep("Forms", renderForms);
