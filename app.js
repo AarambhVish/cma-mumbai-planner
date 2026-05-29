@@ -7,6 +7,7 @@ const googleSheetSource = {
   gvizUrl: "https://docs.google.com/spreadsheets/d/1QC7jdICqY237tKxiOLWJtDJ5Huaa4HSA/gviz/tq?sheet=Batch%20Wise",
   importSource: "google-sheet"
 };
+const fixedCloudSyncUrl = "https://script.google.com/macros/s/AKfycbw1FsCcB8Dd3ydpazVSCOZx0qUwrHanZdP4woDRc4z4VVFp1dagHPFetp_YKU2a7OdirA/exec";
 const defaultTimeSlots = [
   { start: "07:00", end: "10:00" },
   { start: "12:00", end: "20:00" },
@@ -1476,6 +1477,14 @@ function saveData(options = {}) {
   if (!options.skipCloudSave) scheduleCloudAutoSave();
 }
 
+function animateButton(button, className = "button-saved", duration = 700) {
+  if (!button) return;
+  button.classList.remove(className);
+  void button.offsetWidth;
+  button.classList.add(className);
+  setTimeout(() => button.classList.remove(className), duration);
+}
+
 const loginSessionKey = "cma-planner-login-ok";
 const loginRoleKey = "cma-planner-login-role";
 const loginProfessorKey = "cma-planner-login-professor";
@@ -1667,13 +1676,13 @@ function logout() {
 }
 
 function cloudSyncUrl() {
-  return String(data.settings.googleWebAppUrl || "").trim().replace(/\/dev(\?|$)/, "/exec$1");
+  return fixedCloudSyncUrl;
 }
 
 function requireCloudSyncUrl() {
   const url = cloudSyncUrl();
   if (!url) {
-    alert("First paste your Google Apps Script Web App URL in Masters > Master Data, then press Save Master Data.");
+    alert("Google Cloud Sync URL is not configured in the software.");
     return "";
   }
   if (!url.includes("script.google.com") || !url.includes("/exec")) {
@@ -1690,24 +1699,58 @@ function updateCloudStatus(message = "", tone = "") {
   status.className = `cloud-status ${tone}`.trim();
 }
 
-function loadCloudData() {
+function timetableSummaryForProgram(program = activeProgram()) {
+  const programBatchIds = new Set(data.batches.filter((batch) => batchProgram(batch) === program).map((batch) => batch.id));
+  const slots = data.slots.filter((slot) => programBatchIds.has(slot.batchId));
+  const dates = [...new Set(slots.map((slot) => slot.date).filter(Boolean))].sort();
+  return {
+    count: slots.length,
+    firstDate: dates[0] || "",
+    lastDate: dates[dates.length - 1] || "",
+    weekCount: slots.filter((slot) => slot.date >= selectedWeekStart && slot.date <= addDays(selectedWeekStart, 6)).length
+  };
+}
+
+function timetableSummaryText(program = activeProgram()) {
+  const summary = timetableSummaryForProgram(program);
+  if (!summary.count) return `No ${program} timetable rows found in saved data.`;
+  return `${summary.count} ${program} timetable rows saved from ${summary.firstDate} to ${summary.lastDate}. Current week ${selectedWeekStart} to ${addDays(selectedWeekStart, 6)} has ${summary.weekCount} row${summary.weekCount === 1 ? "" : "s"}.`;
+}
+
+function requestCloudData(url, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `cmaCloudLoad_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    let timeoutId;
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      delete window[callbackName];
+      script.remove();
+    };
+    window[callbackName] = (response) => {
+      cleanup();
+      resolve(response);
+    };
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Could not reach Google cloud sync."));
+    };
+    script.src = `${url}${url.includes("?") ? "&" : "?"}action=load&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
+    document.body.appendChild(script);
+    timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error("Google cloud sync opened but did not return data."));
+    }, timeoutMs);
+  });
+}
+
+async function loadCloudData() {
   const url = requireCloudSyncUrl();
   if (!url) return;
   cloudLoadInProgress = true;
   updateCloudStatus("Loading...", "saving");
-
-  const callbackName = `cmaCloudLoad_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const script = document.createElement("script");
-  let timeoutId;
-  const cleanup = () => {
-    clearTimeout(timeoutId);
-    cloudLoadInProgress = false;
-    delete window[callbackName];
-    script.remove();
-  };
-
-  window[callbackName] = (response) => {
-    cleanup();
+  try {
+    const response = await requestCloudData(url);
     if (!response?.ok || !response.data) {
       alert(response?.error || "Could not load cloud data. Please check the Apps Script URL and deployment access.");
       return;
@@ -1720,33 +1763,26 @@ function loadCloudData() {
     }
     data = { ...structuredClone(defaultData), ...response.data };
     ensureDataShape();
-    data.settings.googleWebAppUrl = savedUrl || data.settings.googleWebAppUrl || "";
+    data.settings.googleWebAppUrl = fixedCloudSyncUrl;
     saveData({ skipCloudSave: true });
     updateCloudStatus(data.settings.lastCloudSavedAt ? `Loaded ${new Date(data.settings.lastCloudSavedAt).toLocaleTimeString()}` : "Loaded", "saved");
     alert(data.settings.lastCloudSavedAt
-      ? `Cloud data loaded. Last cloud save was ${new Date(data.settings.lastCloudSavedAt).toLocaleString()}.`
-      : "Cloud data loaded into this device.");
-  };
-
-  script.onerror = () => {
-    cleanup();
+      ? `Cloud data loaded. Last cloud save was ${new Date(data.settings.lastCloudSavedAt).toLocaleString()}.\n\n${timetableSummaryText()}`
+      : `Cloud data loaded into this device.\n\n${timetableSummaryText()}`);
+  } catch (error) {
     updateCloudStatus("Load failed", "error");
-    alert("Could not reach Google cloud sync. Check that your pasted URL is the deployed Web App /exec URL and access is set to Anyone with the link.");
-  };
-  script.src = `${url}${url.includes("?") ? "&" : "?"}action=load&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
-  document.body.appendChild(script);
-  timeoutId = setTimeout(() => {
-    cleanup();
-    updateCloudStatus("Load timeout", "error");
-    alert("Google cloud sync opened but did not return data. In Apps Script, deploy as Web App with access: Anyone with the link, then copy the /exec URL again.");
-  }, 12000);
+    alert(`${error.message} Check that your pasted URL is the deployed Web App /exec URL and access is set to Anyone with the link.`);
+  } finally {
+    cloudLoadInProgress = false;
+  }
 }
 
 function saveCloudData(options = {}) {
   const silent = Boolean(options.silent);
   const url = requireCloudSyncUrl();
   if (!url) return;
-  data.settings.lastCloudSavedAt = new Date().toISOString();
+  const saveStamp = new Date().toISOString();
+  data.settings.lastCloudSavedAt = saveStamp;
   localStorage.setItem(storeKey, JSON.stringify(data));
   updateCloudStatus("Saving...", "saving");
 
@@ -1755,7 +1791,6 @@ function saveCloudData(options = {}) {
   iframe.name = iframeName;
   iframe.style.display = "none";
   let completed = false;
-  let submitted = false;
   let timeoutId;
 
   const cleanup = () => {
@@ -1763,14 +1798,6 @@ function saveCloudData(options = {}) {
     iframe.remove();
     form.remove();
   };
-
-  iframe.addEventListener("load", () => {
-    if (!submitted || completed) return;
-    completed = true;
-    cleanup();
-    updateCloudStatus(`Saved ${new Date(data.settings.lastCloudSavedAt).toLocaleTimeString()}`, "saved");
-    if (!silent) alert(`Planner data saved to Google cloud at ${new Date(data.settings.lastCloudSavedAt).toLocaleString()}.`);
-  });
 
   const form = document.createElement("form");
   form.method = "POST";
@@ -1785,15 +1812,35 @@ function saveCloudData(options = {}) {
   form.appendChild(payloadInput);
 
   document.body.append(iframe, form);
-  submitted = true;
   form.submit();
+
+  setTimeout(async () => {
+    if (completed) return;
+    try {
+      const response = await requestCloudData(url, 20000);
+      const cloudStamp = response?.data?.settings?.lastCloudSavedAt || "";
+      if (!response?.ok || cloudStamp !== saveStamp) {
+        throw new Error(response?.error || "Cloud save could not be verified.");
+      }
+      completed = true;
+      cleanup();
+      updateCloudStatus(`Saved ${new Date(saveStamp).toLocaleTimeString()}`, "saved");
+      if (!silent) alert(`Planner data saved and verified at ${new Date(saveStamp).toLocaleString()}.\n\n${timetableSummaryText()}`);
+    } catch (error) {
+      completed = true;
+      cleanup();
+      updateCloudStatus("Save not verified", "error");
+      if (!silent) alert(`${error.message} Please confirm Apps Script was deployed as a new Web App version, then press Cloud Save again.`);
+    }
+  }, 6000);
+
   timeoutId = setTimeout(() => {
     if (completed) return;
     completed = true;
     cleanup();
     updateCloudStatus("Save timeout", "error");
-    if (!silent) alert("Cloud Save did not confirm within 25 seconds. Please check internet and Apps Script deployment, then try Cloud Save again.");
-  }, 25000);
+    if (!silent) alert("Cloud Save did not confirm within 45 seconds. Please check internet and Apps Script deployment, then try Cloud Save again.");
+  }, 45000);
 }
 
 function uid(prefix) {
@@ -2387,7 +2434,7 @@ function renderForms() {
 
   $("#masterForm").innerHTML = [
     field("telegramBotToken", "Telegram Bot Token", "password", data.settings.telegramBotToken || "", "placeholder=\"123456:ABC...\""),
-    field("googleWebAppUrl", "Google Cloud Sync URL", "url", data.settings.googleWebAppUrl || "", "placeholder=\"Paste Apps Script Web App URL here\""),
+    `<div class="fixed-cloud-url wide"><strong>Google Cloud Sync URL</strong><span>Locked to the institute cloud link.</span></div>`,
     field("centre", "New Centre", "text", "", "placeholder=\"e.g. Ghatkopar\""),
     `<div class="row-actions wide"><button type="submit">Save Master Data</button></div>`
   ].join("");
@@ -2859,28 +2906,57 @@ function paperNameByNo(paperNo) {
 function professorTopicAssignmentCombos(professorId) {
   const seen = new Set();
   const headPaperNos = (data.professors.find((professor) => professor.id === professorId)?.headPaperNos || []).map(Number);
-  return data.slots
-    .filter((slot) => {
-      if (slot.noLecture) return false;
-      const paperNo = paperNumbers[slotSubject(slot)];
-      return slotProfessorId(slot) === professorId || headPaperNos.includes(Number(paperNo));
-    })
-    .map((slot) => {
-      const batch = batchById(slot.batchId);
-      const paperNo = paperNumbers[slotSubject(slot)];
-      if (!batch || !paperNo) return null;
-      const key = `${batch.id}|${paperNo}`;
-      if (seen.has(key)) return null;
-      seen.add(key);
-      return {
-        key,
+  const headCombos = headPaperNos.flatMap((paperNo) =>
+    activeProgramBatches()
+      .filter((batch) => papersForLevel(batch.level).some((paper) => paperNumbers[paper] === paperNo))
+      .map((batch) => ({
+        key: `${batch.id}|${paperNo}`,
         batchId: batch.id,
         paperNo,
-        label: `${batch.name} | ${batch.centre} | P${paperNo} ${paperNameByNo(paperNo)}`
+        label: `${batch.name} | ${batch.centre} | ${paperCodeLabel(paperNo)} ${paperNameByNo(paperNo)}`
+      }))
+  );
+  const assignedPlanCombos = data.topicPlans
+    .filter((plan) => plan.professorId === professorId)
+    .map((plan) => {
+      const batch = batchById(plan.batchId);
+      const paperNo = paperForPlan(plan);
+      if (!batch || !paperNo || batchProgram(batch) !== activeProgram()) return null;
+      return {
+        key: `${batch.id}|${paperNo}`,
+        batchId: batch.id,
+        paperNo,
+        label: `${batch.name} | ${batch.centre} | ${paperCodeLabel(paperNo)} ${paperNameByNo(paperNo)}`
       };
     })
-    .filter(Boolean)
+    .filter(Boolean);
+  return [...headCombos, ...assignedPlanCombos]
+    .filter((combo) => {
+      if (seen.has(combo.key)) return false;
+      seen.add(combo.key);
+      return true;
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function professorAssignedTopicIds(professorId, batchId, paperNo) {
+  return new Set(data.topicPlans
+    .filter((plan) =>
+      plan.professorId === professorId &&
+      plan.batchId === batchId &&
+      paperForPlan(plan) === Number(paperNo)
+    )
+    .map((plan) => plan.topicId));
+}
+
+function professorHasAssignedTopicForSlot(professorId, slot) {
+  const paperNo = paperNumbers[slotSubject(slot)];
+  return Boolean(slot && paperNo && data.topicPlans.some((plan) =>
+    plan.professorId === professorId &&
+    plan.batchId === slot.batchId &&
+    plan.topicId &&
+    paperForPlan(plan) === paperNo
+  ));
 }
 
 function topicPlanOwner(batchId, topicId) {
@@ -2900,8 +2976,9 @@ function eligibleProfessorsForBatchPaper(batchId, paperNo) {
     .filter((slot) => paperNumbers[slotSubject(slot)] === Number(paperNo))
     .map((slot) => slotProfessorId(slot))
     .filter(Boolean));
-  return data.professors
+  return activeProgramProfessors()
     .filter((professor) =>
+      professor.id === loggedInProfessorId() ||
       assignedIds.has(professor.id) ||
       ((professor.levels || []).includes(batch?.level) && (professor.papers || []).includes(paper))
     )
@@ -2912,8 +2989,10 @@ function renderProfessorSelfTopicForm(professorId) {
   const form = $("#professorSelfTopicForm");
   if (!form) return;
   const combos = professorTopicAssignmentCombos(professorId);
+  const professor = data.professors.find((item) => item.id === professorId);
+  const isAnyHead = Boolean((professor?.headPaperNos || []).length);
   if (!combos.length) {
-    form.innerHTML = `<div class="empty wide">No assigned timetable lecture found yet. Topic selection opens after this professor is assigned in Weekly Timetable.</div>`;
+    form.innerHTML = `<div class="empty wide">${isAnyHead ? "No batch found for this head paper/section." : "No chapter assigned by Head Professor yet."}</div>`;
     return;
   }
   const currentComboKey = form.elements?.comboKey?.value || combos[0].key;
@@ -2939,27 +3018,45 @@ function renderProfessorSelfTopicForm(professorId) {
   const targetOptions = isHead
     ? eligibleProfessorsForBatchPaper(selectedCombo.batchId, selectedCombo.paperNo)
     : [];
+  const allowedTopicIds = professorAssignedTopicIds(professorId, selectedCombo.batchId, selectedCombo.paperNo);
+  const visibleTopics = isHead ? topics : topics.filter((topic) => allowedTopicIds.has(topic.id));
+  const readOnlyAssignedRows = !isHead
+    ? data.topicPlans
+      .filter((plan) =>
+        plan.professorId === professorId &&
+        plan.batchId === selectedCombo.batchId &&
+        paperForPlan(plan) === selectedCombo.paperNo
+      )
+      .map((plan) => ({ plan, topic: topicById(plan.topicId) }))
+      .filter((row) => row.topic)
+    : [];
   form.innerHTML = [
     selectField("comboKey", "Batch / Paper", combos.map((combo) => ({ value: combo.key, label: combo.label })), selectedCombo.key),
     isHead ? selectField("targetProfessorId", "Assign Topics To", targetOptions.map((professor) => ({ value: professor.id, label: professor.name })), targetProfessor?.id || professorId) : "",
     `<div class="self-topic-summary">
       <strong>${ownHours.toFixed(1)} hrs selected</strong>
-      <span>${timetableHours.toFixed(1)} timetable hrs available for ${escapeHtml(targetProfessor?.name || "this professor")}</span>
+      <span>${isHead ? `${timetableHours.toFixed(1)} timetable hrs available for ${escapeHtml(targetProfessor?.name || "this professor")}` : "Assigned chapters are locked by Head Professor"}</span>
     </div>`,
-    `<div class="topic-checklist self-topic-list wide">
-      ${topics.map((topic) => {
+    isHead ? `<div class="topic-checklist self-topic-list wide">
+      ${visibleTopics.map((topic) => {
         const owner = topicPlanOwner(selectedCombo.batchId, topic.id);
         const ownedByOther = owner && owner.professorId !== (targetProfessor?.id || professorId);
         const ownerName = ownedByOther ? professorName(owner.professorId) : "";
         const checked = ownTopicIds.has(topic.id);
-        return `<label class="topic-check ${ownedByOther ? "locked-topic" : ""}">
-          <input name="topicIds" type="checkbox" value="${escapeHtml(topic.id)}" ${checked ? "checked" : ""} ${ownedByOther ? "disabled" : ""}>
+        const locked = ownedByOther;
+        return `<label class="topic-check ${locked ? "locked-topic" : ""}">
+          <input name="topicIds" type="checkbox" value="${escapeHtml(topic.id)}" ${checked ? "checked" : ""} ${locked ? "disabled" : ""}>
           <span>P${topic.paperNo} | ${escapeHtml(topic.chapterName)}${ownedByOther ? ` | Taken by ${escapeHtml(ownerName)}` : ""}</span>
-          <input class="topic-hours" name="topicHours_${escapeHtml(topic.id)}" type="number" min="0" step="0.5" value="${Number(owner?.allocatedHours || topic.standardHours || 0).toFixed(1)}" ${ownedByOther ? "disabled" : ""}>
+          <input class="topic-hours" name="topicHours_${escapeHtml(topic.id)}" type="number" min="0" step="0.5" value="${Number(owner?.allocatedHours || topic.standardHours || 0).toFixed(1)}" ${locked ? "disabled" : ""}>
         </label>`;
       }).join("") || `<div class="empty">No topics found for this paper.</div>`}
+    </div>` : `<div class="readonly-topic-list wide">
+      ${readOnlyAssignedRows.map(({ plan, topic }) => `<div class="readonly-topic-row">
+        <strong>${escapeHtml(paperCodeLabel(topic.paperNo))} | ${escapeHtml(topic.chapterName)}</strong>
+        <span>${Number(plan.allocatedHours || 0).toFixed(1)} hrs assigned by ${escapeHtml(professorName(plan.assignedByProfessorId))}</span>
+      </div>`).join("") || `<div class="empty">No chapter assigned to you for this batch/paper yet.</div>`}
     </div>`,
-    `<div class="row-actions wide"><button type="submit">Save My Topic Selection</button></div>`
+    isHead ? `<div class="row-actions wide"><button type="submit">Save Head Topic Allocation</button></div>` : ""
   ].join("");
 }
 
@@ -2970,6 +3067,10 @@ function saveProfessorSelfTopicSelection(event) {
   const combo = professorTopicAssignmentCombos(professorId).find((item) => item.key === form.elements.comboKey.value);
   if (!professorId || !combo) return;
   const isHead = professorIsSubjectHead(professorId, combo.paperNo);
+  if (!isHead) {
+    alert("Only Head Professor can assign chapters. Please ask the Head Professor to allocate topics to you.");
+    return;
+  }
   const targetProfessorId = isHead ? (form.elements.targetProfessorId?.value || professorId) : professorId;
   const selectedTopicIds = new Set(Array.from(form.querySelectorAll('input[name="topicIds"]:checked')).map((input) => input.value));
 
@@ -2993,9 +3094,9 @@ function saveProfessorSelfTopicSelection(event) {
       weekStart: selectedWeekStart,
       allocatedHours: hours,
       givenHours: existingOwn ? Number(existingOwn.givenHours || 0) : 0,
-      selfAssigned: targetProfessorId === professorId,
+      selfAssigned: false,
       assignedByProfessorId: professorId,
-      assignedByRole: targetProfessorId === professorId ? "professor" : "head"
+      assignedByRole: "head"
     };
     if (existingOwn) Object.assign(existingOwn, payload);
     else data.topicPlans.push({ id: uid("tp"), ...payload });
@@ -3779,9 +3880,11 @@ function renderProfessorLogin() {
   const currentTopicPlanId = editingActual?.topicPlanId || $("#professorActualForm")?.elements?.topicPlanId?.value || "";
   const selectedPlan = allocationPlans.find((plan) => plan.id === currentTopicPlanId) || allocationPlans[0];
   const planOptions = [
-    { value: "", label: allocationPlans.length ? "Select allocated topic" : "No allocated topic / type manually" },
+    { value: "", label: allocationPlans.length ? "Select allocated topic" : "No topic assigned by Head Professor" },
     ...allocationPlans.map((plan) => ({ value: plan.id, label: plannedTopicLabel(plan) }))
   ];
+  const professorNeedsAssignedTopic = isProfessorMode();
+  const topicLocked = professorNeedsAssignedTopic && !selectedPlan;
 
   $("#professorActualForm").innerHTML = [
     selectField("slotId", "Lecture", slots.map((slot) => {
@@ -3790,7 +3893,7 @@ function renderProfessorLogin() {
     }), selectedSlot?.id || ""),
     `<input type="hidden" name="actualLectureId" value="${escapeHtml(editingActual?.id || "")}">`,
     selectField("topicPlanId", "Allocated Topic", planOptions, selectedPlan?.id || ""),
-    field("topic", "Actual Topic Taught", "text", editingActual?.topic || (selectedPlan ? plannedTopicText(selectedPlan) : ""), "placeholder=\"Write exact topic taught\" required"),
+    field("topic", "Actual Topic Taught", "text", editingActual?.topic || (selectedPlan ? plannedTopicText(selectedPlan) : ""), `placeholder="${topicLocked ? "Ask Head Professor to assign chapter first" : "Write exact topic taught"}" ${professorNeedsAssignedTopic ? "readonly" : ""} required`),
     field("timeIn", "Time In", "time", editingActual?.timeIn || selectedSlot?.start || "07:00", "required"),
     field("timeOut", "Time Out", "time", editingActual?.timeOut || selectedSlot?.end || "10:00", "required"),
     field("breakMinutes", "Break Minutes", "number", editingActual?.breakMinutes || "0", "min=\"0\" step=\"5\" required"),
@@ -3798,7 +3901,8 @@ function renderProfessorLogin() {
     `<label><span>Lecture Status</span><select name="lectureStatus"><option value="Completed" ${editingActual?.lectureStatus === "Completed" ? "selected" : ""}>Completed</option><option value="Partly Completed" ${editingActual?.lectureStatus === "Partly Completed" ? "selected" : ""}>Partly Completed</option><option value="Not Completed" ${editingActual?.lectureStatus === "Not Completed" ? "selected" : ""}>Not Completed</option></select></label>`,
     field("pendingPortion", "Pending Portion", "text", editingActual?.pendingPortion || "", "placeholder=\"If anything remains, write here\""),
     `<label class="wide"><span>Remarks</span><textarea name="remarks" placeholder="Covered examples, test planned, extra practice needed...">${escapeHtml(editingActual?.remarks || "")}</textarea></label>`,
-    `<div class="row-actions wide">${editingActual ? `<button class="ghost" type="button" data-cancel-actual-edit="true">Cancel Edit</button>` : ""}<button type="submit">${editingActual ? "Update Actual Lecture" : "Submit Actual Lecture"}</button></div>`
+    topicLocked ? `<div class="empty wide">Head Professor has not assigned any chapter for this lecture/batch yet. Actual entry is locked until chapter allocation is done.</div>` : "",
+    `<div class="row-actions wide">${editingActual ? `<button class="ghost" type="button" data-cancel-actual-edit="true">Cancel Edit</button>` : ""}<button type="submit" ${topicLocked ? "disabled" : ""}>${editingActual ? "Update Actual Lecture" : "Submit Actual Lecture"}</button></div>`
   ].join("");
   updateActualHoursField($("#professorActualForm"));
 
@@ -4699,7 +4803,7 @@ async function importGoogleSheetTimetable() {
     }
     applyGoogleSheetEntries(entries, range);
     saveData();
-    alert(`Imported ${entries.length} Google Sheet timetable rows for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced.`);
+    alert(`Imported ${entries.length} Google Sheet timetable rows for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced.\n\nNow press Cloud Save and wait for "saved and verified".`);
   } catch (error) {
     alert(`Google Sheet import failed: ${error.message}. Check that the sheet link is shared as Viewer/Anyone with link.`);
   } finally {
@@ -5048,7 +5152,7 @@ function addMaster(event) {
   event.preventDefault();
   const form = event.currentTarget;
   data.settings.telegramBotToken = form.elements.telegramBotToken.value.trim();
-  data.settings.googleWebAppUrl = form.elements.googleWebAppUrl.value.trim();
+  data.settings.googleWebAppUrl = fixedCloudSyncUrl;
   const centre = form.elements.centre.value.trim();
   if (centre && !data.centres.includes(centre)) data.centres.push(centre);
   form.reset();
@@ -5124,6 +5228,14 @@ function saveActualLecture(event) {
   }
   const topicPlanId = form.elements.topicPlanId.value;
   const topicPlan = data.topicPlans.find((plan) => plan.id === topicPlanId);
+  if (isProfessorMode() && !topicPlan) {
+    alert("Please select an allocated chapter. Head Professor must assign the chapter before actual lecture entry.");
+    return;
+  }
+  if (isProfessorMode() && topicPlan?.professorId !== professorId) {
+    alert("This chapter is not assigned to your professor login.");
+    return;
+  }
   const topic = form.elements.topic.value.trim() || (topicPlan ? plannedTopicText(topicPlan) : "");
   updateActualHoursField(form);
   const breakMinutes = Math.max(0, Number(form.elements.breakMinutes.value || 0));
@@ -5266,6 +5378,12 @@ function updateFilterVisibility(viewName = document.querySelector(".tab.active")
 }
 
 function bindEvents() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("button, .file-trigger");
+    if (!button || button.disabled) return;
+    animateButton(button, "button-pressed", 180);
+  });
+
   $$("[data-program]").forEach((button) => {
     button.addEventListener("click", () => setActiveProgram(button.dataset.program));
   });
@@ -5297,6 +5415,9 @@ function bindEvents() {
   $("#batchForm").addEventListener("submit", addBatch);
   $("#masterForm").addEventListener("submit", addMaster);
   $("#loginForm").addEventListener("submit", handleLogin);
+  document.addEventListener("submit", (event) => {
+    animateButton(event.submitter, "button-saved", 700);
+  });
   $("#logoutBtn").addEventListener("click", logout);
   $("#initialCloudLoadBtn").addEventListener("click", () => {
     hideInitialCloudPrompt();
@@ -5304,7 +5425,10 @@ function bindEvents() {
   });
   $("#skipInitialCloudLoad").addEventListener("click", hideInitialCloudPrompt);
   $("#cloudLoadBtn").addEventListener("click", loadCloudData);
-  $("#cloudSaveBtn").addEventListener("click", saveCloudData);
+  $("#cloudSaveBtn").addEventListener("click", (event) => {
+    animateButton(event.currentTarget, "button-saved", 700);
+    saveCloudData();
+  });
   $("#professorManagementForm").addEventListener("submit", addProfessorFromManagement);
   $("#professorManagementLevel").addEventListener("change", renderProfessorManagement);
   $("#professorManagementPaper").addEventListener("change", renderProfessorManagement);
