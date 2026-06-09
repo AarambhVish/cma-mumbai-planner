@@ -1,4 +1,5 @@
 const storeKey = "cma-mumbai-planner-v1";
+const userThemeKey = "cma-planner-user-theme";
 const dummyReportTag = "dummy-report-data";
 const changedTTSource = "changed-tt";
 const googleSheetSource = {
@@ -1566,6 +1567,7 @@ function renderProgramSwitch() {
       ? "CMA USA Part 1 and Part 2 timetable, faculty allocation, and progress control."
       : "CMA India Foundation, Inter, and Final timetable, faculty allocation, and syllabus completion control.";
   }
+  renderUserTheme();
 }
 
 function setActiveProgram(program) {
@@ -1578,6 +1580,24 @@ function setActiveProgram(program) {
   });
   localStorage.setItem(storeKey, JSON.stringify(data));
   setTimeout(render, 0);
+}
+
+function userTheme() {
+  return localStorage.getItem(userThemeKey) || "auto";
+}
+
+function renderUserTheme() {
+  const theme = userTheme();
+  const effectiveTheme = theme === "auto" ? "" : theme;
+  if (effectiveTheme) document.body.dataset.theme = effectiveTheme;
+  else delete document.body.dataset.theme;
+  const select = $("#userThemeSelect");
+  if (select) select.value = theme;
+}
+
+function setUserTheme(theme) {
+  localStorage.setItem(userThemeKey, theme || "auto");
+  renderUserTheme();
 }
 
 function applyAccessMode() {
@@ -5581,6 +5601,7 @@ function bindEvents() {
   $$("[data-program]").forEach((button) => {
     button.addEventListener("click", () => setActiveProgram(button.dataset.program));
   });
+  $("#userThemeSelect")?.addEventListener("change", (event) => setUserTheme(event.target.value));
 
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {

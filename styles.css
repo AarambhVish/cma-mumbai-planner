@@ -27,6 +27,39 @@ body[data-program="usa"] {
   background: #eeeaf6;
 }
 
+body[data-theme="teal"] {
+  --brand: #0f5d68;
+  --brand-dark: #083f49;
+  --brand-soft: #dceff2;
+  --nav: #143647;
+}
+
+body[data-theme="purple"] {
+  --brand: #4c1d95;
+  --brand-dark: #2e1065;
+  --brand-soft: #ede9fe;
+  --nav: #24123f;
+}
+
+body[data-theme="blue"] {
+  --brand: #245ca8;
+  --brand-dark: #173d73;
+  --brand-soft: #e3eefc;
+  --nav: #19395f;
+}
+
+body[data-theme="contrast"] {
+  --ink: #050505;
+  --muted: #333333;
+  --line: #111111;
+  --soft: #ffffff;
+  --brand: #000000;
+  --brand-dark: #000000;
+  --brand-soft: #f2f2f2;
+  --nav: #000000;
+  background: #ffffff;
+}
+
 body[data-program="usa"] .topbar {
   background: linear-gradient(90deg, #fbfaff 0%, #eee7fb 100%);
   border-bottom-color: #c9b7ee;
@@ -123,6 +156,21 @@ h2 {
   background: #d9e6ef;
   border: 1px solid #bdcedd;
   border-radius: 8px;
+}
+
+.theme-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.theme-picker select {
+  min-height: 32px;
+  width: 118px;
+  padding: 0 8px;
 }
 
 .cloud-status {
