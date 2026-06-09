@@ -1493,7 +1493,7 @@ const loginSessionKey = "cma-planner-login-ok";
 const loginRoleKey = "cma-planner-login-role";
 const loginProfessorKey = "cma-planner-login-professor";
 const loginId = "CMATT";
-const loginPassword = "cma";
+const loginPasswordHash = "f0d2be946f8e877a5221ae0d50e4526462550a175f8260d6cab9bef34f5e125b";
 let cloudSaveReminderId = null;
 let editingActualLectureId = "";
 let cloudAutoSaveId = null;
@@ -1546,6 +1546,13 @@ function professorLoginShareMessage(professor) {
     "",
     "Please update after every lecture."
   ].join("\n");
+}
+
+async function sha256Hex(value) {
+  if (!window.crypto?.subtle) return "";
+  const bytes = new TextEncoder().encode(value);
+  const hash = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function setActiveView(viewName) {
@@ -1647,7 +1654,7 @@ function scheduleCloudAutoSave() {
   cloudAutoSaveId = setTimeout(() => saveCloudData({ silent: true }), 5000);
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const enteredId = form.elements.loginId.value.trim();
@@ -1655,7 +1662,7 @@ function handleLogin(event) {
   const selectedRole = form.elements.loginRole.value;
   const error = $("#loginError");
 
-  if (selectedRole === "owner" && enteredId === loginId && enteredPassword === loginPassword) {
+  if (selectedRole === "owner" && enteredId === loginId && await sha256Hex(enteredPassword) === loginPasswordHash) {
     sessionStorage.setItem(loginSessionKey, "yes");
     sessionStorage.setItem(loginRoleKey, "owner");
     sessionStorage.removeItem(loginProfessorKey);
@@ -5049,6 +5056,86 @@ async function copyTextFrom(selector) {
   }
 }
 
+function htmlToImageSvg(element) {
+  const rect = element.getBoundingClientRect();
+  const width = Math.ceil(rect.width);
+  const height = Math.ceil(rect.height);
+  const html = new XMLSerializer().serializeToString(element.cloneNode(true));
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <foreignObject width="100%" height="100%">
+      <div xmlns="http://www.w3.org/1999/xhtml">${html}</div>
+    </foreignObject>
+  </svg>`;
+}
+
+async function elementToPngBlob(element) {
+  const rect = element.getBoundingClientRect();
+  const width = Math.ceil(rect.width);
+  const height = Math.ceil(rect.height);
+  const svg = htmlToImageSvg(element);
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0);
+    return await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function copyTimetableImage(selector) {
+  const element = $(selector)?.querySelector(".tt-fit-wrap");
+  if (!element) return;
+  try {
+    const blob = await elementToPngBlob(element);
+    if (!blob || !navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+      throw new Error("Image clipboard is not available in this browser.");
+    }
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    alert("Timetable image copied. You can paste it in WhatsApp, email, or documents.");
+  } catch (error) {
+    alert(`${error.message} Use the Image button to download the timetable image instead.`);
+  }
+}
+
+function openWhatsAppShare(text) {
+  const message = cleanSheetText(text || "");
+  if (!message) {
+    alert("No message available to share.");
+    return;
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+}
+
+function changesTTShareMessage() {
+  const valid = parseChangesTTInput().filter((row) => row.ok);
+  if (!valid.length) return cleanSheetText($("#changesTTInput")?.value || "");
+  return [
+    "Dear Students,",
+    "",
+    "Please note the following timetable change:",
+    "",
+    ...valid.map((entry) => [
+      `Batch: ${entry.batchName}`,
+      `Date: ${fullDateLabel(entry.date)}`,
+      `Time: ${formatTimeRange(entry.start, entry.end)}`,
+      `Subject: ${entry.subject}`,
+      `Professor: ${entry.noLecture ? "No Lecture" : entry.professorName}`
+    ].join("\n")),
+    "",
+    "Thanks"
+  ].join("\n\n");
+}
+
 function openTelegramShare(text) {
   const url = `https://t.me/share/url?url=&text=${encodeURIComponent(text)}`;
   window.open(url, "_blank", "noopener,noreferrer");
@@ -5704,10 +5791,12 @@ function bindEvents() {
     }
     if (["timeIn", "timeOut", "breakMinutes"].includes(event.target.name)) updateActualHoursField(event.currentTarget);
   });
-  $("#copyBatchShareBtn").addEventListener("click", () => copyTextFrom("#batchShareText"));
-  $("#copyProfessorShareBtn").addEventListener("click", () => copyTextFrom("#professorShareText"));
+  $("#copyBatchShareBtn").addEventListener("click", () => copyTimetableImage("#batchTimetablePreview"));
+  $("#copyProfessorShareBtn").addEventListener("click", () => copyTimetableImage("#professorTimetablePreview"));
   $("#downloadBatchImageBtn").addEventListener("click", downloadBatchImage);
   $("#downloadProfessorImageBtn").addEventListener("click", downloadProfessorImage);
+  $("#whatsappBatchShareBtn")?.addEventListener("click", () => openWhatsAppShare($("#batchShareText").value));
+  $("#whatsappProfessorShareBtn")?.addEventListener("click", () => openWhatsAppShare($("#professorShareText").value));
   $("#telegramBatchShareBtn").addEventListener("click", sendSelectedBatchTelegram);
   $("#telegramProfessorShareBtn").addEventListener("click", () => openTelegramShare($("#professorShareText").value));
   $("#weeklyTable").addEventListener("change", updateWeeklySlot);
@@ -5728,6 +5817,7 @@ function bindEvents() {
   $("#importGoogleSheetBtn").addEventListener("click", importGoogleSheetTimetable);
   $("#changesTTInput")?.addEventListener("input", renderChangesTTPreview);
   $("#applyChangesTTBtn")?.addEventListener("click", applyChangesTT);
+  $("#whatsappChangesTTBtn")?.addEventListener("click", () => openWhatsAppShare(changesTTShareMessage()));
   $("#clearChangesTTBtn")?.addEventListener("click", () => {
     $("#changesTTInput").value = "";
     renderChangesTTPreview();

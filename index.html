@@ -204,6 +204,7 @@
               <span>Paste single or multiple timetable changes. Applied rows will be tagged as Changed.</span>
             </div>
             <div class="row-actions">
+              <button class="ghost" id="whatsappChangesTTBtn" type="button">WhatsApp Share</button>
               <button class="ghost" id="clearChangesTTBtn" type="button">Clear</button>
               <button id="applyChangesTTBtn" type="button">Apply to Timetable</button>
             </div>
@@ -233,8 +234,9 @@ Professor : Sandesh Sir
               </div>
               <div class="share-actions">
                 <select id="batchShareSelect"></select>
-                <button class="ghost" id="copyBatchShareBtn" type="button">Copy</button>
+                <button class="ghost" id="copyBatchShareBtn" type="button">Copy Image</button>
                 <button class="ghost" id="downloadBatchImageBtn" type="button">Image</button>
+                <button class="ghost" id="whatsappBatchShareBtn" type="button">WhatsApp</button>
                 <button id="telegramBatchShareBtn" type="button">Telegram</button>
               </div>
             </div>
@@ -242,7 +244,7 @@ Professor : Sandesh Sir
               <div class="timetable-card" id="batchTimetablePreview"></div>
               <div class="share-info-card" id="batchShareInfo"></div>
             </div>
-            <textarea class="share-box" id="batchShareText" readonly></textarea>
+            <textarea class="share-box hidden" id="batchShareText" readonly></textarea>
           </section>
 
           <section class="panel">
@@ -253,8 +255,9 @@ Professor : Sandesh Sir
               </div>
               <div class="share-actions">
                 <select id="professorShareSelect"></select>
-                <button class="ghost" id="copyProfessorShareBtn" type="button">Copy</button>
+                <button class="ghost" id="copyProfessorShareBtn" type="button">Copy Image</button>
                 <button class="ghost" id="downloadProfessorImageBtn" type="button">Professor Image</button>
+                <button class="ghost" id="whatsappProfessorShareBtn" type="button">WhatsApp</button>
                 <button id="telegramProfessorShareBtn" type="button">Telegram</button>
               </div>
             </div>
@@ -262,7 +265,7 @@ Professor : Sandesh Sir
               <div class="timetable-card" id="professorTimetablePreview"></div>
               <div class="share-info-card" id="professorShareInfo"></div>
             </div>
-            <textarea class="share-box" id="professorShareText" readonly></textarea>
+            <textarea class="share-box hidden" id="professorShareText" readonly></textarea>
           </section>
         </div>
 
