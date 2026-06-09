@@ -182,8 +182,12 @@
                 Google Sheet
                 <input id="googleSheetLinkInput" type="url" placeholder="Paste Google Sheet link">
               </label>
+              <label class="import-all-field" title="Import all readable timetable rows from the sheet and keep them saved in the database">
+                <input id="importFullSheetToggle" type="checkbox">
+                Full sheet
+              </label>
               <button id="addWeeklyRowBtn" type="button">Add Time Slot</button>
-              <button class="import-sheet-btn" id="importGoogleSheetBtn" type="button" title="Import timetable from Google Sheet for the selected week">Import Google Sheet</button>
+              <button class="import-sheet-btn" id="importGoogleSheetBtn" type="button" title="Import timetable from Google Sheet and save it in this software">Import Google Sheet</button>
             </div>
           </div>
           <div class="insight-grid compact-insights" id="weeklyInsights" aria-label="Weekly timetable analytics"></div>
@@ -689,6 +693,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260522-freeform-changes"></script>
+    <script src="app.js?v=20260609-weekly-import-full"></script>
   </body>
 </html>

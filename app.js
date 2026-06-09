@@ -4303,11 +4303,11 @@ function googleSheetIdFromLink(link) {
   return match?.[1] || "";
 }
 
-function googleSheetGvizUrl() {
+function googleSheetGvizUrl(sheetName = googleSheetSource.sheet) {
   const input = $("#googleSheetLinkInput");
   const link = input?.value.trim() || data.settings.googleSheetLink || "";
   const sheetId = googleSheetIdFromLink(link) || googleSheetSource.id;
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=${encodeURIComponent(googleSheetSource.sheet)}`;
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=${encodeURIComponent(sheetName)}`;
 }
 
 function renderGoogleSheetLinkField() {
@@ -4315,7 +4315,7 @@ function renderGoogleSheetLinkField() {
   if (input) input.value = data.settings.googleSheetLink || "";
 }
 
-function loadGoogleSheetTable() {
+function loadGoogleSheetTableFromTab(sheetName) {
   return new Promise((resolve, reject) => {
     const callbackName = `googleSheetImport_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement("script");
@@ -4341,9 +4341,22 @@ function loadGoogleSheetTable() {
       cleanup();
       reject(new Error("Could not load Google Sheet"));
     };
-    script.src = `${googleSheetGvizUrl()}&tqx=responseHandler:${callbackName}`;
+    script.src = `${googleSheetGvizUrl(sheetName)}&tqx=responseHandler:${callbackName}`;
     document.head.appendChild(script);
   });
+}
+
+async function loadGoogleSheetTable() {
+  const tabNames = [...new Set([googleSheetSource.sheet, "Time Table", "Timetable", "TimeTable"])];
+  let lastError = null;
+  for (const tabName of tabNames) {
+    try {
+      return await loadGoogleSheetTableFromTab(tabName);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Google Sheet returned no table data");
 }
 
 function googleTableToRows(table) {
@@ -4489,7 +4502,7 @@ function isImportableSheetBatch(batchName) {
   return text.length > 2 && !/^\d+$/.test(text);
 }
 
-function googleSheetRowsToEntries(rows, range) {
+function googleSheetRowsToEntries(rows, range = null) {
   const entries = [];
   const seen = new Set();
   rows.slice(1).forEach((row) => {
@@ -4498,7 +4511,7 @@ function googleSheetRowsToEntries(rows, range) {
       const batchName = cleanSheetText(row[offset + 4]);
       if (!date || !isImportableSheetBatch(batchName)) return;
       if (programForLevel(rawLevelFromBatchName(batchName)) !== activeProgram()) return;
-      if (date < range.from || date > range.to) return;
+      if (range && (date < range.from || date > range.to)) return;
       const fixedTime = fixSheetTimeRange(parseSheetTime(row[offset + 1]), parseSheetTime(row[offset + 2]));
       if (!fixedTime.start || !fixedTime.end) return;
       const professorCell = String(row[offset + 3] || "");
@@ -4506,7 +4519,8 @@ function googleSheetRowsToEntries(rows, range) {
       const lines = professorCell.split(/\r?\n/).map(cleanSheetText).filter(Boolean);
       const professorName = noLecture ? "" : (lines[0] || "");
       const subject = noLecture ? "No Lecture" : normalizeGoogleSubject(lines[1] || "", batchName);
-      const entry = [date, fixedTime.start, fixedTime.end, professorName, subject, batchName, noLecture, `${googleSheetSource.importSource}-${range.from}-to-${range.to}`];
+      const sourceRange = range ? `${range.from}-to-${range.to}` : "full-sheet";
+      const entry = [date, fixedTime.start, fixedTime.end, professorName, subject, batchName, noLecture, `${googleSheetSource.importSource}-${sourceRange}`];
       const key = entry.slice(0, 7).join("|");
       if (!seen.has(key)) {
         seen.add(key);
@@ -4538,6 +4552,21 @@ function selectedGoogleSheetImportRange() {
   return { from, to: addDays(from, 6) };
 }
 
+function entryRange(entries) {
+  const dates = entries.map((entry) => entry[0]).filter(Boolean).sort();
+  return dates.length ? { from: dates[0], to: dates[dates.length - 1] } : selectedGoogleSheetImportRange();
+}
+
+function clearPreviousFullGoogleImport() {
+  const removedSlotIds = new Set(data.slots
+    .filter((slot) => String(slot.importSource || "").startsWith(googleSheetSource.importSource))
+    .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram())
+    .map((slot) => slot.id));
+  data.slots = data.slots.filter((slot) => !removedSlotIds.has(slot.id));
+  data.actualLectures = data.actualLectures.filter((entry) => !removedSlotIds.has(entry.slotId));
+  data.progress = data.progress.filter((entry) => !removedSlotIds.has(entry.slotId));
+}
+
 function clearTimetableForGoogleImport(range) {
   const removedSlotIds = new Set(data.slots
     .filter((slot) => slot.date >= range.from && slot.date <= range.to)
@@ -4558,8 +4587,8 @@ function clearTimetableForGoogleImport(range) {
   });
 }
 
-function applyGoogleSheetEntries(entries, range) {
-  clearTimetableForGoogleImport(range);
+function applyGoogleSheetEntries(entries, range, options = {}) {
+  if (!options.skipClear) clearTimetableForGoogleImport(range);
   entries.forEach(([date, start, end, professorName, subject, rawBatchName, noLecture, importSource]) => {
     const batchMeta = importedBatchMeta(rawBatchName, subject);
     if (programForLevel(batchMeta.level) !== activeProgram()) return;
@@ -4914,29 +4943,37 @@ async function importGoogleSheetTimetable() {
       data.settings.googleSheetLink = sheetLink;
       localStorage.setItem(storeKey, JSON.stringify(data));
     }
-    const range = selectedGoogleSheetImportRange();
+    const importFullSheet = Boolean($("#importFullSheetToggle")?.checked);
+    const selectedRange = selectedGoogleSheetImportRange();
     const table = await loadGoogleSheetTable();
     const rows = googleTableToRows(table);
-    const entries = googleSheetRowsToEntries(rows, range);
+    const entries = googleSheetRowsToEntries(rows, importFullSheet ? null : selectedRange);
+    const range = importFullSheet ? entryRange(entries) : selectedRange;
     if (!entries.length) {
-      const diagnostics = googleSheetImportDiagnostics(rows, range);
+      const diagnostics = googleSheetImportDiagnostics(rows, selectedRange);
       const availableText = diagnostics.dates.length
         ? ` Available dates in sheet: ${diagnostics.dates.slice(0, 12).join(", ")}${diagnostics.dates.length > 12 ? "..." : ""}. Rows read: ${diagnostics.rowCount}. Rows in selected week: ${diagnostics.rowsInRange}.`
         : " No valid timetable dates were readable from the sheet.";
-      throw new Error(`No timetable rows found for ${range.from} to ${range.to}.${availableText}`);
+      throw new Error(importFullSheet
+        ? `No timetable rows found in the Google Sheet.${availableText}`
+        : `No timetable rows found for ${range.from} to ${range.to}.${availableText}`);
     }
-    applyGoogleSheetEntries(entries, range);
+    if (importFullSheet) clearPreviousFullGoogleImport();
+    applyGoogleSheetEntries(entries, range, { skipClear: importFullSheet });
     data.settings.googleImportHistory.unshift({
       importedAt: new Date().toISOString(),
       program: activeProgram(),
       from: range.from,
       to: range.to,
       count: entries.length,
+      mode: importFullSheet ? "full-sheet" : "selected-week",
       sheetLink: data.settings.googleSheetLink || sheetLink
     });
     data.settings.googleImportHistory = data.settings.googleImportHistory.slice(0, 20);
     saveData();
-    alert(`Imported ${entries.length} Google Sheet timetable rows for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced.\n\nNow press Cloud Save and wait for "saved and verified".`);
+    alert(importFullSheet
+      ? `Imported ${entries.length} Google Sheet timetable rows from the full sheet (${range.from} to ${range.to}). Old Google Sheet imported rows were replaced and the data is now saved locally.\n\nPress Cloud Save once so other devices also get this imported database.`
+      : `Imported ${entries.length} Google Sheet timetable rows for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced and the data is now saved locally.\n\nPress Cloud Save once so other devices also get this imported database.`);
   } catch (error) {
     alert(`Google Sheet import failed: ${error.message}. Check that the sheet link is shared as Viewer/Anyone with link.`);
   } finally {
