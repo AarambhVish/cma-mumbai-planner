@@ -4111,7 +4111,7 @@ function renderWeeklyTable() {
   const weeklyTable = $(".weekly-table");
   if (weeklyTable) {
     weeklyTable.style.setProperty("--weekly-column-width", `${columnWidth}px`);
-      weeklyTable.style.minWidth = `${104 + 184 + (visibleBatches.length * columnWidth)}px`;
+      weeklyTable.style.minWidth = `${86 + 146 + (visibleBatches.length * columnWidth)}px`;
   }
   renderWeeklyInsights(dates, visibleBatches, activeTimeSlots);
   const slotsByCell = new Map(data.slots.map((slot) => [`${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`, slot]));
@@ -5092,11 +5092,34 @@ async function elementToPngBlob(element) {
   }
 }
 
+async function svgToPngBlob(svg) {
+  const width = Number(svg.match(/\bwidth="(\d+)"/)?.[1] || 1092);
+  const height = Number(svg.match(/\bheight="(\d+)"/)?.[1] || 720);
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0);
+    return await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 async function copyTimetableImage(selector) {
   const element = $(selector)?.querySelector(".tt-fit-wrap");
   if (!element) return;
   try {
-    const blob = await elementToPngBlob(element);
+    const shareSvg = selectedTimetableShareSvg(selector);
+    const blob = shareSvg ? await svgToPngBlob(shareSvg) : await elementToPngBlob(element);
     if (!blob || !navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       throw new Error("Image clipboard is not available in this browser.");
     }
@@ -5104,6 +5127,55 @@ async function copyTimetableImage(selector) {
     alert("Timetable image copied. You can paste it in WhatsApp, email, or documents.");
   } catch (error) {
     alert(`${error.message} Use the Image button to download the timetable image instead.`);
+  }
+}
+
+function downloadBlob(blob, fileName) {
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function selectedTimetableShareSvg(selector) {
+  if (selector === "#batchTimetablePreview") {
+    return batchTimetableSvg(batchById($("#batchShareSelect").value));
+  }
+  if (selector === "#professorTimetablePreview") {
+    const professor = data.professors.find((item) => item.id === $("#professorShareSelect").value);
+    return professorTimetableSvg(professor);
+  }
+  return "";
+}
+
+async function shareTimetableImageToWhatsApp(selector, fileName) {
+  const element = $(selector)?.querySelector(".tt-fit-wrap");
+  if (!element) return;
+  try {
+    const shareSvg = selectedTimetableShareSvg(selector);
+    const blob = shareSvg ? await svgToPngBlob(shareSvg) : await elementToPngBlob(element);
+    if (!blob) throw new Error("Timetable image could not be created.");
+    const file = new File([blob], fileName, { type: "image/png" });
+
+    if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+      await navigator.share({ files: [file], title: "Timetable" });
+      return;
+    }
+
+    if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      alert("Timetable image copied. WhatsApp will open now; paste the image in the chat and send.");
+      window.open("https://web.whatsapp.com/", "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    downloadBlob(blob, fileName);
+    alert("Timetable image downloaded. Open WhatsApp and attach this downloaded image.");
+  } catch (error) {
+    alert(`${error.message} Please use the Image button and attach the downloaded timetable in WhatsApp.`);
   }
 }
 
@@ -5181,8 +5253,7 @@ function svgEscape(value) {
   }[char]));
 }
 
-function downloadBatchImage() {
-  const batch = batchById($("#batchShareSelect").value);
+function batchTimetableSvg(batch) {
   if (!batch) return;
   const slots = batchSlots(batch.id);
   const width = 1092;
@@ -5232,17 +5303,17 @@ function downloadBatchImage() {
       ${Array.from({ length: bodyRows + 1 }, (_, index) => `<line x1="0" y1="${headingHeight + headerHeight + index * rowHeight}" x2="${width}" y2="${headingHeight + headerHeight + index * rowHeight}"/>`).join("")}
     </g>
   </svg>`;
-  const blob = new Blob([svg], { type: "image/svg+xml" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${batch.name}_timetable.svg`;
-  link.click();
-  URL.revokeObjectURL(url);
+  return svg;
 }
 
-function downloadProfessorImage() {
-  const professor = data.professors.find((item) => item.id === $("#professorShareSelect").value);
+function downloadBatchImage() {
+  const batch = batchById($("#batchShareSelect").value);
+  const svg = batchTimetableSvg(batch);
+  if (!svg) return;
+  downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${batch.name}_timetable.svg`);
+}
+
+function professorTimetableSvg(professor) {
   if (!professor) return;
   const slots = slotsForCurrentWeek({ applyWeeklyFilters: false })
     .filter((slot) => slotProfessorId(slot) === professor.id)
@@ -5314,13 +5385,14 @@ function downloadProfessorImage() {
       ${rowLines.map((y) => `<line x1="0" y1="${y}" x2="${width}" y2="${y}"/>`).join("")}
     </g>
   </svg>`;
-  const blob = new Blob([svg], { type: "image/svg+xml" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${professor.name}_schedule.svg`;
-  link.click();
-  URL.revokeObjectURL(url);
+  return svg;
+}
+
+function downloadProfessorImage() {
+  const professor = data.professors.find((item) => item.id === $("#professorShareSelect").value);
+  const svg = professorTimetableSvg(professor);
+  if (!svg) return;
+  downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${professor.name}_schedule.svg`);
 }
 
 function professorWeeklyPrintableRows(professorId) {
@@ -5795,8 +5867,14 @@ function bindEvents() {
   $("#copyProfessorShareBtn").addEventListener("click", () => copyTimetableImage("#professorTimetablePreview"));
   $("#downloadBatchImageBtn").addEventListener("click", downloadBatchImage);
   $("#downloadProfessorImageBtn").addEventListener("click", downloadProfessorImage);
-  $("#whatsappBatchShareBtn")?.addEventListener("click", () => openWhatsAppShare($("#batchShareText").value));
-  $("#whatsappProfessorShareBtn")?.addEventListener("click", () => openWhatsAppShare($("#professorShareText").value));
+  $("#whatsappBatchShareBtn")?.addEventListener("click", () => {
+    const batch = batchById($("#batchShareSelect").value);
+    shareTimetableImageToWhatsApp("#batchTimetablePreview", `${slug(batch?.name || "batch")}-timetable.png`);
+  });
+  $("#whatsappProfessorShareBtn")?.addEventListener("click", () => {
+    const professor = data.professors.find((item) => item.id === $("#professorShareSelect").value);
+    shareTimetableImageToWhatsApp("#professorTimetablePreview", `${slug(professor?.name || "professor")}-timetable.png`);
+  });
   $("#telegramBatchShareBtn").addEventListener("click", sendSelectedBatchTelegram);
   $("#telegramProfessorShareBtn").addEventListener("click", () => openTelegramShare($("#professorShareText").value));
   $("#weeklyTable").addEventListener("change", updateWeeklySlot);
@@ -5810,7 +5888,7 @@ function bindEvents() {
     const weeklyTable = $(".weekly-table");
     if (weeklyTable) {
       weeklyTable.style.setProperty("--weekly-column-width", `${data.settings.weeklyColumnWidth}px`);
-      weeklyTable.style.minWidth = `${104 + 184 + (filteredBatches().length * data.settings.weeklyColumnWidth)}px`;
+      weeklyTable.style.minWidth = `${86 + 146 + (filteredBatches().length * data.settings.weeklyColumnWidth)}px`;
     }
   });
   $("#weeklyColumnSize").addEventListener("change", saveData);
