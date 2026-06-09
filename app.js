@@ -1607,6 +1607,11 @@ function setUserTheme(theme) {
   renderUserTheme();
 }
 
+function updateWeeklyFullscreenButton() {
+  const button = $("#weeklyFullscreenBtn");
+  if (button) button.textContent = document.fullscreenElement ? "Exit Full Screen" : "Full Screen";
+}
+
 function applyAccessMode() {
   const professorMode = isProfessorMode();
   document.body.classList.toggle("professor-mode", professorMode);
@@ -4193,7 +4198,10 @@ function renderWeeklyTable() {
   $("#weeklyTable").innerHTML = dates.flatMap((date) => {
     const visibleTimeSlots = boardTimeSlotsForDate(date, activeTimeSlots);
     return visibleTimeSlots.map((timeSlot, slotIndex) => {
-      const dateCell = `<td class="weekly-date-col"><strong>${escapeHtml(dayLabel(date))}</strong></td>`;
+      const dateCell = `<td class="weekly-date-col">
+        <button class="date-delete-x" data-delete-time-slot-date="${escapeHtml(date)}" data-delete-time-slot-start="${escapeHtml(timeSlot.start)}" data-delete-time-slot-end="${escapeHtml(timeSlot.end)}" type="button" title="Delete this time slot">×</button>
+        <strong>${escapeHtml(dayLabel(date))}</strong>
+      </td>`;
       const cells = visibleBatches.map((batch) => {
         const slot = slotsForBoardCell(batch.id, date, timeSlot);
         const professorId = slotProfessorId(slot || { batchId: batch.id, professorId: "" });
@@ -4236,7 +4244,6 @@ function renderWeeklyTable() {
               <span>to</span>
               <input class="time-part" data-time-date="${escapeHtml(date)}" data-time-start="${escapeHtml(timeSlot.start)}" data-time-end="${escapeHtml(timeSlot.end)}" data-field="end" type="text" value="${escapeHtml(formatTimeShort(timeSlot.end))}">
             </div>
-            <button class="tiny danger" data-delete-time-slot-date="${escapeHtml(date)}" data-delete-time-slot-start="${escapeHtml(timeSlot.start)}" data-delete-time-slot-end="${escapeHtml(timeSlot.end)}" type="button">Delete</button>
           </div>
         </td>
         ${cells}
@@ -5838,6 +5845,7 @@ function bindEvents() {
     if (!button || button.disabled) return;
     animateButton(button, "button-pressed", 180);
   });
+  document.addEventListener("fullscreenchange", updateWeeklyFullscreenButton);
 
   $$("[data-program]").forEach((button) => {
     button.addEventListener("click", () => setActiveProgram(button.dataset.program));
@@ -5998,6 +6006,15 @@ function bindEvents() {
   });
   $("#weeklyColumnSize").addEventListener("change", saveData);
   $("#importGoogleSheetBtn").addEventListener("click", importGoogleSheetTimetable);
+  $("#weeklyFullscreenBtn")?.addEventListener("click", () => {
+    const panel = $("#weeklyView .panel");
+    if (!panel) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    } else {
+      panel.requestFullscreen?.();
+    }
+  });
   $("#changesTTInput")?.addEventListener("input", renderChangesTTPreview);
   $("#applyChangesTTBtn")?.addEventListener("click", applyChangesTT);
   $("#whatsappChangesTTBtn")?.addEventListener("click", () => openWhatsAppShare(changesTTShareMessage()));
@@ -6142,7 +6159,7 @@ function bindEvents() {
       data.slots = data.slots.filter((slot) => slot.batchId !== batchId);
       data.progress = data.progress.filter((entry) => entry.batchId !== batchId);
     }
-    if (timeSlotDate && confirm("Delete this time slot row for this day only? Existing classes in this slot on this date will also be removed.")) {
+    if (timeSlotDate && confirm(`Delete this time slot for ${dayLabel(timeSlotDate)}?\n\nTime: ${formatTimeRange(timeSlotStart, timeSlotEnd)}\n\nThis will also remove any lectures planned in this row.`)) {
       const nextSlots = timeSlotsForDate(timeSlotDate).filter((slot) => !(slot.start === timeSlotStart && slot.end === timeSlotEnd));
       setTimeSlotsForDate(timeSlotDate, nextSlots);
       data.slots = data.slots.filter((slot) => !(slot.date === timeSlotDate && slot.start === timeSlotStart && slot.end === timeSlotEnd));
