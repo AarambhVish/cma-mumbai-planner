@@ -1477,7 +1477,7 @@ function isOldAutoProfessorPassword(professor) {
 
 function saveData(options = {}) {
   localStorage.setItem(storeKey, JSON.stringify(data));
-  render();
+  if (!options.skipRender) render();
   if (!options.skipCloudSave) scheduleCloudAutoSave();
 }
 
@@ -4156,6 +4156,61 @@ function compactWeeklyAssignmentOptions(batch, currentSlot, selectedProfessorId 
   return options.join("");
 }
 
+function weeklyCellMetaHtml(batch, slot) {
+  const professorId = slotProfessorId(slot || { batchId: batch?.id || "", professorId: "" });
+  const subject = slot ? slotSubject(slot) : "";
+  if (professorId) {
+    return `<div class="weekly-meta assignment-chip" style="background:${escapeHtml(professorColor(professorId))}">
+      <strong title="${escapeHtml(professorName(professorId))}">${escapeHtml(professorName(professorId))}</strong>
+      <span title="${escapeHtml(paperShort(batch?.level, subject))}">${escapeHtml(paperShort(batch?.level, subject))}</span>
+    </div>`;
+  }
+  if (slot?.noLecture) {
+    return `<div class="weekly-meta assignment-chip no-lecture-chip"><strong>No Lecture</strong><span>${escapeHtml(batch?.name || "")}</span></div>`;
+  }
+  return `<div class="weekly-meta open-meta"></div>`;
+}
+
+function refreshWeeklyCell(select, batch, slot) {
+  const cell = select.closest(".weekly-cell");
+  if (!cell) return;
+  const professorId = slotProfessorId(slot || { batchId: batch?.id || "", professorId: "" });
+  const filled = Boolean(slot && (professorId || slot.noLecture));
+  cell.classList.toggle("filled", Boolean(professorId));
+  cell.classList.toggle("no-lecture", Boolean(slot?.noLecture));
+  cell.classList.toggle("conflict", Boolean(slot && professorId && slotHasProfessorConflict(slot)));
+  cell.querySelector(".weekly-meta")?.remove();
+  cell.insertAdjacentHTML("afterbegin", weeklyCellMetaHtml(batch, slot));
+  select.dataset.optionsLoaded = "0";
+  select.innerHTML = compactWeeklyAssignmentOptions(batch, slot, filled ? professorId : "", slot ? slotSubject(slot) : "");
+}
+
+function deleteTimeSlotWithConfirmation(date, start, end) {
+  const rowSlots = data.slots
+    .filter((slot) => slot.date === date && slot.start === start && slot.end === end)
+    .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram());
+  const plannedRows = rowSlots.filter((slot) => slotProfessorId(slot) || slot.noLecture || slot.subject);
+  const timeText = formatTimeRange(start, end);
+  const details = plannedRows.map((slot, index) => {
+    const batch = batchById(slot.batchId);
+    const professor = slot.noLecture ? "No Lecture" : professorName(slotProfessorId(slot)) || "Open";
+    const subject = slot.noLecture ? "No Lecture" : paperShort(batch?.level, slotSubject(slot));
+    return `${index + 1}. ${batch?.name || "Unknown batch"} | ${professor} | ${subject}`;
+  });
+  const message = details.length
+    ? `This row has ${details.length} planned lecture${details.length === 1 ? "" : "s"}:\n\n${details.join("\n")}\n\nDelete this time slot for ${dayLabel(date)} (${timeText}) and remove these lectures?`
+    : `Delete empty time slot for ${dayLabel(date)} (${timeText})?`;
+  if (!confirm(message)) return false;
+
+  const removedSlotIds = new Set(rowSlots.map((slot) => slot.id));
+  const nextSlots = timeSlotsForDate(date).filter((slot) => !(slot.start === start && slot.end === end));
+  setTimeSlotsForDate(date, nextSlots);
+  data.slots = data.slots.filter((slot) => !(slot.date === date && slot.start === start && slot.end === end));
+  data.actualLectures = data.actualLectures.filter((entry) => !removedSlotIds.has(entry.slotId));
+  data.progress = data.progress.filter((entry) => !removedSlotIds.has(entry.slotId));
+  return true;
+}
+
 function renderWeeklyTable() {
   $("#weekStart").value = selectedWeekStart;
   const selectedDays = selectedValues($("#dayFilter"));
@@ -4212,14 +4267,7 @@ function renderWeeklyTable() {
         const hiddenByProfessor = selectedProfessor !== "All" && filled && professorId !== selectedProfessor;
         const cellClass = `${hiddenByProfessor ? "hidden-by-professor" : noLecture ? "no-lecture" : conflict ? "conflict" : filled ? "filled" : ""} ${isDummy(slot) ? "dummy-weekly" : ""}`;
         const assignmentStyle = noLecture ? `style="background:#e7f0fb"` : "";
-        const meta = professorId
-          ? `<div class="weekly-meta assignment-chip" style="background:${escapeHtml(professorColor(professorId))}">
-              <strong title="${escapeHtml(professorName(professorId))}">${escapeHtml(professorName(professorId))}</strong>
-              <span title="${escapeHtml(paperShort(batch.level, subject))}">${escapeHtml(paperShort(batch.level, subject))}</span>
-            </div>`
-          : noLecture
-            ? `<div class="weekly-meta assignment-chip no-lecture-chip"><strong>No Lecture</strong><span>${escapeHtml(batch.name)}</span></div>`
-            : `<div class="weekly-meta open-meta"></div>`;
+        const meta = weeklyCellMetaHtml(batch, slot);
         return `<td style="background:${escapeHtml(cellTint(batchColor(batch)))}">
           <div class="weekly-cell ${cellClass}">
             ${meta}
@@ -4373,7 +4421,7 @@ function loadGoogleSheetTableFromTab(sheetName) {
 }
 
 async function loadGoogleSheetTable() {
-  const tabNames = [...new Set([googleSheetSource.sheet, "Time Table", "Timetable", "TimeTable"])];
+  const tabNames = [...new Set([googleSheetSource.sheet, "Time Table", "Timetable", "TimeTable", "TT", "Weekly", "Schedule"])];
   let lastError = null;
   for (const tabName of tabNames) {
     try {
@@ -4383,6 +4431,21 @@ async function loadGoogleSheetTable() {
     }
   }
   throw lastError || new Error("Google Sheet returned no table data");
+}
+
+async function loadGoogleSheetTables() {
+  const tabNames = [...new Set([googleSheetSource.sheet, "Time Table", "Timetable", "TimeTable", "TT", "Weekly", "Schedule"])];
+  const tables = [];
+  let lastError = null;
+  for (const tabName of tabNames) {
+    try {
+      tables.push({ sheetName: tabName, table: await loadGoogleSheetTableFromTab(tabName) });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!tables.length) throw lastError || new Error("Google Sheet returned no table data");
+  return tables;
 }
 
 function googleTableToRows(table) {
@@ -4971,14 +5034,25 @@ async function importGoogleSheetTimetable() {
     }
     const importFullSheet = Boolean($("#importFullSheetToggle")?.checked);
     const selectedRange = selectedGoogleSheetImportRange();
-    const table = await loadGoogleSheetTable();
-    const rows = googleTableToRows(table);
-    const entries = googleSheetRowsToEntries(rows, importFullSheet ? null : selectedRange);
+    const tableCandidates = (await loadGoogleSheetTables()).map(({ sheetName, table }) => {
+      const rows = googleTableToRows(table);
+      const entries = googleSheetRowsToEntries(rows, importFullSheet ? null : selectedRange);
+      const diagnostics = googleSheetImportDiagnostics(rows, selectedRange);
+      return { sheetName, rows, entries, diagnostics };
+    });
+    const selectedCandidate = tableCandidates
+      .filter((candidate) => candidate.entries.length)
+      .sort((a, b) => b.entries.length - a.entries.length)[0] || tableCandidates[0];
+    const rows = selectedCandidate.rows;
+    const entries = selectedCandidate.entries;
     const range = importFullSheet ? entryRange(entries) : selectedRange;
     if (!entries.length) {
-      const diagnostics = googleSheetImportDiagnostics(rows, selectedRange);
-      const availableText = diagnostics.dates.length
-        ? ` Available dates in sheet: ${diagnostics.dates.slice(0, 12).join(", ")}${diagnostics.dates.length > 12 ? "..." : ""}. Rows read: ${diagnostics.rowCount}. Rows in selected week: ${diagnostics.rowsInRange}.`
+      const allDates = [...new Set(tableCandidates.flatMap((candidate) => candidate.diagnostics.dates))].sort();
+      const rowsRead = tableCandidates.reduce((sum, candidate) => sum + candidate.diagnostics.rowCount, 0);
+      const rowsInRange = tableCandidates.reduce((sum, candidate) => sum + candidate.diagnostics.rowsInRange, 0);
+      const tabsChecked = tableCandidates.map((candidate) => candidate.sheetName).join(", ");
+      const availableText = allDates.length
+        ? ` Available dates in checked tabs: ${allDates.slice(0, 18).join(", ")}${allDates.length > 18 ? "..." : ""}. Tabs checked: ${tabsChecked}. Rows read: ${rowsRead}. Rows in selected week: ${rowsInRange}.`
         : " No valid timetable dates were readable from the sheet.";
       throw new Error(importFullSheet
         ? `No timetable rows found in the Google Sheet.${availableText}`
@@ -4993,13 +5067,14 @@ async function importGoogleSheetTimetable() {
       to: range.to,
       count: entries.length,
       mode: importFullSheet ? "full-sheet" : "selected-week",
+      sheetName: selectedCandidate.sheetName,
       sheetLink: data.settings.googleSheetLink || sheetLink
     });
     data.settings.googleImportHistory = data.settings.googleImportHistory.slice(0, 20);
     saveData();
     alert(importFullSheet
-      ? `Imported ${entries.length} Google Sheet timetable rows from the full sheet (${range.from} to ${range.to}). Old Google Sheet imported rows were replaced and the data is now saved locally.\n\nPress Cloud Save once so other devices also get this imported database.`
-      : `Imported ${entries.length} Google Sheet timetable rows for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced and the data is now saved locally.\n\nPress Cloud Save once so other devices also get this imported database.`);
+      ? `Imported ${entries.length} Google Sheet timetable rows from "${selectedCandidate.sheetName}" (${range.from} to ${range.to}). Old Google Sheet imported rows were replaced and the data is now saved locally.\n\nPress Cloud Save once so other devices also get this imported database.`
+      : `Imported ${entries.length} Google Sheet timetable rows from "${selectedCandidate.sheetName}" for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced and the data is now saved locally.\n\nPress Cloud Save once so other devices also get this imported database.`);
   } catch (error) {
     alert(`Google Sheet import failed: ${error.message}. Check that the sheet link is shared as Viewer/Anyone with link.`);
   } finally {
@@ -5049,13 +5124,14 @@ function updateWeeklySlot(event) {
       slot.professorId = "";
       slot.subject = "No Lecture";
       if (oldSlot?.professorId) notifyProfessorChange(oldSlot.professorId, slot, oldSlot, "Lecture cancelled / no lecture");
-      saveData();
+      refreshWeeklyCell(event.target, batch, slot);
+      saveData({ skipRender: true });
       return;
     }
     const [professorId, subject] = event.target.value.split("||");
     if (professorId && !professorIsAvailable(professorId, date, start, end, slot)) {
       alert(`${professorName(professorId)} is already booked in this time. Please select another available professor.`);
-      renderWeeklyTable();
+      refreshWeeklyCell(event.target, batch, oldSlot);
       return;
     }
     slot.noLecture = false;
@@ -5068,11 +5144,13 @@ function updateWeeklySlot(event) {
   if (!slot.professorId) {
     if (oldSlot?.professorId) notifyProfessorChange(oldSlot.professorId, { ...slot, professorId: "", noLecture: true, subject: "No Lecture" }, oldSlot, "Lecture removed");
     data.slots = data.slots.filter((item) => item.id !== slot.id);
+    refreshWeeklyCell(event.target, batch, null);
   } else {
     if (oldSlot?.professorId) notifyProfessorChange(oldSlot.professorId, slot, oldSlot, "Lecture changed");
     if (slot.professorId && slot.professorId !== oldSlot?.professorId) notifyProfessorChange(slot.professorId, slot, oldSlot, "New lecture assigned");
+    refreshWeeklyCell(event.target, batch, slot);
   }
-  saveData();
+  saveData({ skipRender: true });
 }
 
 function updateTimeSlot(event) {
@@ -6159,10 +6237,9 @@ function bindEvents() {
       data.slots = data.slots.filter((slot) => slot.batchId !== batchId);
       data.progress = data.progress.filter((entry) => entry.batchId !== batchId);
     }
-    if (timeSlotDate && confirm(`Delete this time slot for ${dayLabel(timeSlotDate)}?\n\nTime: ${formatTimeRange(timeSlotStart, timeSlotEnd)}\n\nThis will also remove any lectures planned in this row.`)) {
-      const nextSlots = timeSlotsForDate(timeSlotDate).filter((slot) => !(slot.start === timeSlotStart && slot.end === timeSlotEnd));
-      setTimeSlotsForDate(timeSlotDate, nextSlots);
-      data.slots = data.slots.filter((slot) => !(slot.date === timeSlotDate && slot.start === timeSlotStart && slot.end === timeSlotEnd));
+    if (timeSlotDate) {
+      if (deleteTimeSlotWithConfirmation(timeSlotDate, timeSlotStart, timeSlotEnd)) saveData();
+      return;
     }
     if (slotId || progressId || batchId || timeSlotDate) saveData();
   });
