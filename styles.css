@@ -803,6 +803,7 @@ textarea {
 
 #weeklyView .table-wrap {
   max-height: 72vh;
+  min-height: 360px;
 }
 
 .weekly-head {
@@ -937,7 +938,7 @@ table {
 .weekly-table tbody td {
   padding: 0;
   vertical-align: middle;
-  height: 38px;
+  height: 42px;
   line-height: 1;
 }
 
@@ -1003,8 +1004,8 @@ table {
   display: grid;
   grid-template-columns: 1fr;
   align-items: center;
-  height: 38px;
-  min-height: 38px;
+  height: 42px;
+  min-height: 42px;
   padding: 0;
   border-radius: 0;
   background: rgba(255, 255, 255, 0.38);
@@ -1016,8 +1017,8 @@ table {
 }
 
 .assignment-select {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  inset: auto;
   z-index: 2;
   width: 100%;
   height: 100%;
@@ -1025,10 +1026,10 @@ table {
   font-size: 12px;
   font-weight: 700;
   padding: 0 17px 0 5px;
-  border: 0;
-  border-radius: 0;
-  color: transparent;
-  background: transparent;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 4px;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.82);
   appearance: auto;
 }
 
@@ -1044,6 +1045,9 @@ table {
 }
 
 .assignment-chip {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   grid-column: 1;
   min-width: 0;
   height: 100%;
@@ -1112,8 +1116,8 @@ table {
   grid-template-columns: 28px 104px auto;
   align-items: center;
   gap: 2px;
-  height: 38px;
-  min-height: 38px;
+  height: 42px;
+  min-height: 42px;
   padding: 0 3px;
   white-space: nowrap;
 }
@@ -1170,6 +1174,34 @@ select[multiple] {
 
 .weekly-cell.filled {
   box-shadow: inset 4px 0 0 var(--green);
+}
+
+.weekly-cell.filled,
+.weekly-cell.no-lecture {
+  padding: 0;
+}
+
+.weekly-cell:not(.filled):not(.no-lecture) {
+  padding: 4px 6px;
+}
+
+.weekly-cell.filled .assignment-select,
+.weekly-cell.no-lecture .assignment-select {
+  opacity: 0;
+}
+
+.weekly-cell.filled:hover .assignment-select,
+.weekly-cell.filled:focus-within .assignment-select,
+.weekly-cell.no-lecture:hover .assignment-select,
+.weekly-cell.no-lecture:focus-within .assignment-select {
+  opacity: 1;
+}
+
+.weekly-cell.filled:hover .assignment-chip,
+.weekly-cell.filled:focus-within .assignment-chip,
+.weekly-cell.no-lecture:hover .assignment-chip,
+.weekly-cell.no-lecture:focus-within .assignment-chip {
+  opacity: 0.2;
 }
 
 .weekly-cell.dummy-weekly {

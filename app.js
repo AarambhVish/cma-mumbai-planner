@@ -2152,6 +2152,23 @@ function timeSlotsForDate(date) {
   return slots.map((slot) => ({ start: slot.start, end: slot.end })).sort((a, b) => a.start.localeCompare(b.start));
 }
 
+function boardTimeSlotsForDate(date, activeTimeSlots = ["All"]) {
+  const slotMap = new Map();
+  timeSlotsForDate(date).forEach((slot) => {
+    if (slot?.start && slot?.end) slotMap.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
+  });
+  data.slots
+    .filter((slot) => slot.date === date)
+    .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram())
+    .forEach((slot) => {
+      if (slot.start && slot.end) slotMap.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
+    });
+  const allSlots = Array.from(slotMap.values()).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+  if (activeTimeSlots.includes("All")) return allSlots.length ? allSlots : [...defaultTimeSlots];
+  const filtered = allSlots.filter((slot) => activeTimeSlots.includes(`${slot.start}|${slot.end}`));
+  return filtered.length ? filtered : allSlots.length ? allSlots : [...defaultTimeSlots];
+}
+
 function setTimeSlotsForDate(date, slots) {
   data.dateTimeSlots[date] = slots
     .map((slot) => ({ start: slot.start, end: slot.end }))
@@ -4170,9 +4187,7 @@ function renderWeeklyTable() {
   }
 
   $("#weeklyTable").innerHTML = dates.flatMap((date) => {
-    const visibleTimeSlots = activeTimeSlots.includes("All")
-      ? timeSlotsForDate(date)
-      : timeSlotsForDate(date).filter((slot) => activeTimeSlots.includes(`${slot.start}|${slot.end}`));
+    const visibleTimeSlots = boardTimeSlotsForDate(date, activeTimeSlots);
     return visibleTimeSlots.map((timeSlot, slotIndex) => {
       const dateCell = `<td class="weekly-date-col"><strong>${escapeHtml(dateLabel(date))}</strong></td>`;
       const cells = visibleBatches.map((batch) => {
