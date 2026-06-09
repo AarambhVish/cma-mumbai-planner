@@ -1081,6 +1081,19 @@ table {
   font-size: 11px;
 }
 
+.weekly-time-row .tiny {
+  min-height: 24px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.weekly-time-row > span:last-child {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1;
+}
+
 select[multiple] {
   min-height: 130px;
 }
