@@ -895,16 +895,16 @@ table {
 
 .weekly-table .weekly-date-col {
   left: 0;
-  width: 86px;
-  min-width: 86px;
-  max-width: 86px;
+  width: 118px;
+  min-width: 118px;
+  max-width: 118px;
 }
 
 .weekly-table .weekly-time-col {
-  left: 86px;
-  width: 146px;
-  min-width: 146px;
-  max-width: 146px;
+  left: 118px;
+  width: 174px;
+  min-width: 174px;
+  max-width: 174px;
 }
 
 .weekly-table th,
@@ -913,7 +913,7 @@ table {
 }
 
 .weekly-table tbody td {
-  padding: 3px 5px;
+  padding: 0;
   vertical-align: middle;
 }
 
@@ -954,29 +954,40 @@ table {
 }
 
 .weekly-cell {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   align-items: center;
-  gap: 3px;
-  min-height: 38px;
-  padding: 3px 5px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.55);
+  min-height: 28px;
+  padding: 0;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.38);
 }
 
 .weekly-cell select,
 .weekly-cell input {
-  min-height: 26px;
+  min-height: 28px;
 }
 
 .assignment-select {
-  grid-column: 1 / -1;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   width: 100%;
-  max-width: none;
+  height: 100%;
+  max-width: 100%;
   font-size: 11px;
   font-weight: 700;
-  padding: 3px 22px 3px 7px;
-  border-color: rgba(24, 32, 47, 0.24);
+  padding: 0 18px 0 6px;
+  border: 0;
+  border-radius: 0;
+  color: transparent;
+  background: transparent;
+  appearance: auto;
+}
+
+.assignment-select option {
+  color: #0f172a;
 }
 
 .weekly-meta {
@@ -989,10 +1000,12 @@ table {
 .assignment-chip {
   grid-column: 1;
   min-width: 0;
-  border: 1px solid rgba(24, 32, 47, 0.2);
-  border-radius: 5px;
-  padding: 3px 5px;
-  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.2);
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 3px 20px 3px 6px;
+  text-align: center;
+  box-shadow: none;
 }
 
 .no-lecture-chip {
@@ -1002,7 +1015,7 @@ table {
 .weekly-meta strong {
   color: #0d2630;
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.05;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1013,7 +1026,7 @@ table {
 .weekly-meta small {
   color: #334155;
   display: block;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.15;
   overflow: hidden;
@@ -1026,7 +1039,7 @@ table {
 }
 
 .weekly-badges {
-  display: flex;
+  display: none;
   flex-wrap: nowrap;
   gap: 4px;
   justify-content: flex-end;
@@ -1035,16 +1048,26 @@ table {
 
 .time-editor {
   display: grid;
-  grid-template-columns: 48px 13px 48px;
+  grid-template-columns: 62px 62px;
   gap: 3px;
   align-items: center;
 }
 
+.time-editor .time-part:first-child {
+  grid-column: 1;
+}
+
+.time-editor .time-part:last-child {
+  grid-column: 2;
+}
+
 .weekly-time-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 38px 1fr auto;
   align-items: center;
-  gap: 3px 5px;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 4px;
   white-space: nowrap;
 }
 
@@ -1066,32 +1089,28 @@ table {
 }
 
 .time-editor span {
-  color: var(--muted);
-  font-size: 11px;
-  text-align: center;
-  padding-left: 0;
+  display: none;
 }
 
 .time-part {
-  width: 48px;
-  min-width: 48px;
-  min-height: 25px;
+  width: 62px;
+  min-width: 62px;
+  min-height: 24px;
   font-weight: 700;
-  padding: 2px 3px;
-  font-size: 11px;
+  padding: 1px 3px;
+  font-size: 12px;
 }
 
 .weekly-time-row .tiny {
-  min-height: 24px;
-  padding: 0 7px;
+  min-height: 22px;
+  padding: 0 5px;
   font-size: 11px;
 }
 
-.weekly-time-row > span:last-child {
-  grid-column: 1 / -1;
+.weekly-time-row > strong {
+  color: #0f172a;
   font-size: 11px;
-  color: var(--muted);
-  line-height: 1;
+  text-align: center;
 }
 
 select[multiple] {
@@ -1099,13 +1118,11 @@ select[multiple] {
 }
 
 .weekly-cell.conflict {
-  border-left: 4px solid var(--red);
-  padding-left: 8px;
+  box-shadow: inset 4px 0 0 var(--red);
 }
 
 .weekly-cell.filled {
-  border-left: 4px solid var(--green);
-  padding-left: 8px;
+  box-shadow: inset 4px 0 0 var(--green);
 }
 
 .weekly-cell.dummy-weekly {
@@ -1114,8 +1131,7 @@ select[multiple] {
 }
 
 .weekly-cell.no-lecture {
-  border-left: 4px solid var(--blue);
-  padding-left: 8px;
+  box-shadow: inset 4px 0 0 var(--blue);
 }
 
 .weekly-cell.hidden-by-professor {

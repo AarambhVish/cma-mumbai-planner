@@ -4111,7 +4111,7 @@ function renderWeeklyTable() {
   const weeklyTable = $(".weekly-table");
   if (weeklyTable) {
     weeklyTable.style.setProperty("--weekly-column-width", `${columnWidth}px`);
-      weeklyTable.style.minWidth = `${86 + 146 + (visibleBatches.length * columnWidth)}px`;
+      weeklyTable.style.minWidth = `${118 + 174 + (visibleBatches.length * columnWidth)}px`;
   }
   renderWeeklyInsights(dates, visibleBatches, activeTimeSlots);
   const slotsByCell = new Map(data.slots.map((slot) => [`${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`, slot]));
@@ -4174,7 +4174,7 @@ function renderWeeklyTable() {
       ? timeSlotsForDate(date)
       : timeSlotsForDate(date).filter((slot) => activeTimeSlots.includes(`${slot.start}|${slot.end}`));
     return visibleTimeSlots.map((timeSlot, slotIndex) => {
-      const dateCell = slotIndex === 0 ? `<td class="weekly-date-col" rowspan="${visibleTimeSlots.length}"><strong>${dayLabel(date)}</strong><br><span class="muted">${date}</span></td>` : "";
+      const dateCell = `<td class="weekly-date-col"><strong>${escapeHtml(dateLabel(date))}</strong></td>`;
       const cells = visibleBatches.map((batch) => {
         const slot = slotsForBoardCell(batch.id, date, timeSlot);
         const professorId = slotProfessorId(slot || { batchId: batch.id, professorId: "" });
@@ -4207,17 +4207,17 @@ function renderWeeklyTable() {
           </div>
         </td>`;
       }).join("");
-      return `<tr>
+      return `<tr class="${slotIndex === 0 ? "date-start-row" : ""}">
         ${dateCell}
         <td class="weekly-time-col">
           <div class="weekly-time-row">
+            <strong>${hoursBetween(timeSlot.start, timeSlot.end).toFixed(2)}</strong>
             <div class="time-editor">
               <input class="time-part" data-time-date="${escapeHtml(date)}" data-time-start="${escapeHtml(timeSlot.start)}" data-time-end="${escapeHtml(timeSlot.end)}" data-field="start" type="text" value="${escapeHtml(formatTimeShort(timeSlot.start))}">
               <span>to</span>
               <input class="time-part" data-time-date="${escapeHtml(date)}" data-time-start="${escapeHtml(timeSlot.start)}" data-time-end="${escapeHtml(timeSlot.end)}" data-field="end" type="text" value="${escapeHtml(formatTimeShort(timeSlot.end))}">
             </div>
             <button class="tiny danger" data-delete-time-slot-date="${escapeHtml(date)}" data-delete-time-slot-start="${escapeHtml(timeSlot.start)}" data-delete-time-slot-end="${escapeHtml(timeSlot.end)}" type="button">Delete</button>
-            <span class="muted">${hoursBetween(timeSlot.start, timeSlot.end).toFixed(1)} hrs</span>
           </div>
         </td>
         ${cells}
@@ -5888,7 +5888,7 @@ function bindEvents() {
     const weeklyTable = $(".weekly-table");
     if (weeklyTable) {
       weeklyTable.style.setProperty("--weekly-column-width", `${data.settings.weeklyColumnWidth}px`);
-      weeklyTable.style.minWidth = `${86 + 146 + (filteredBatches().length * data.settings.weeklyColumnWidth)}px`;
+      weeklyTable.style.minWidth = `${118 + 174 + (filteredBatches().length * data.settings.weeklyColumnWidth)}px`;
     }
   });
   $("#weeklyColumnSize").addEventListener("change", saveData);
