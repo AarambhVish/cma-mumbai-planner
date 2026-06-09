@@ -902,9 +902,9 @@ table {
 
 .weekly-table .weekly-time-col {
   left: 118px;
-  width: 174px;
-  min-width: 174px;
-  max-width: 174px;
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
 }
 
 .weekly-table th,
@@ -915,6 +915,8 @@ table {
 .weekly-table tbody td {
   padding: 0;
   vertical-align: middle;
+  height: 26px;
+  line-height: 1;
 }
 
 .weekly-table tbody tr.date-start-row td {
@@ -958,7 +960,8 @@ table {
   display: grid;
   grid-template-columns: 1fr;
   align-items: center;
-  min-height: 28px;
+  height: 26px;
+  min-height: 26px;
   padding: 0;
   border-radius: 0;
   background: rgba(255, 255, 255, 0.38);
@@ -966,7 +969,7 @@ table {
 
 .weekly-cell select,
 .weekly-cell input {
-  min-height: 28px;
+  min-height: 24px;
 }
 
 .assignment-select {
@@ -976,9 +979,9 @@ table {
   width: 100%;
   height: 100%;
   max-width: 100%;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 0 18px 0 6px;
+  padding: 0 17px 0 5px;
   border: 0;
   border-radius: 0;
   color: transparent;
@@ -1003,7 +1006,7 @@ table {
   height: 100%;
   border: 0;
   border-radius: 0;
-  padding: 3px 20px 3px 6px;
+  padding: 1px 18px 1px 5px;
   text-align: center;
   box-shadow: none;
 }
@@ -1015,8 +1018,8 @@ table {
 .weekly-meta strong {
   color: #0d2630;
   display: block;
-  font-size: 12px;
-  line-height: 1.05;
+  font-size: 10px;
+  line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1026,9 +1029,9 @@ table {
 .weekly-meta small {
   color: #334155;
   display: block;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1048,8 +1051,8 @@ table {
 
 .time-editor {
   display: grid;
-  grid-template-columns: 62px 62px;
-  gap: 3px;
+  grid-template-columns: 50px 50px;
+  gap: 2px;
   align-items: center;
 }
 
@@ -1063,11 +1066,12 @@ table {
 
 .weekly-time-row {
   display: grid;
-  grid-template-columns: 38px 1fr auto;
+  grid-template-columns: 28px 104px auto;
   align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 0 4px;
+  gap: 2px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 2px;
   white-space: nowrap;
 }
 
@@ -1093,23 +1097,23 @@ table {
 }
 
 .time-part {
-  width: 62px;
-  min-width: 62px;
-  min-height: 24px;
+  width: 50px;
+  min-width: 50px;
+  min-height: 22px;
   font-weight: 700;
-  padding: 1px 3px;
-  font-size: 12px;
+  padding: 0 2px;
+  font-size: 9px;
 }
 
 .weekly-time-row .tiny {
-  min-height: 22px;
-  padding: 0 5px;
-  font-size: 11px;
+  min-height: 20px;
+  padding: 0 4px;
+  font-size: 10px;
 }
 
 .weekly-time-row > strong {
   color: #0f172a;
-  font-size: 11px;
+  font-size: 9px;
   text-align: center;
 }
 
