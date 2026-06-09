@@ -186,6 +186,30 @@ h2 {
   white-space: nowrap;
 }
 
+.professor-notifications {
+  display: grid;
+  gap: 8px;
+}
+
+.professor-notification {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.professor-notification.unread {
+  border-left: 4px solid var(--brand);
+  background: #fff;
+}
+
+.professor-notification span,
+.professor-notification small {
+  color: var(--muted);
+}
+
 button.program-pill {
   min-height: 30px;
   padding: 0 12px;

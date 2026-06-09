@@ -901,6 +901,7 @@ const defaultData = {
     googleWebAppUrl: "",
     weeklyColumnWidth: 180,
     activeProgram: "CMA India",
+    googleImportHistory: [],
     levelBatchDefaultsApplied: false
   },
   centres: ["Andheri", "Borivali", "Borivali Hybrid", "CHM", "Dadar", "Dombivli", "Ghatkopar", "Icon Classes", "Jogeshwari", "Mulund", "Shree Classes", "Thane", "Vashi", "Online"],
@@ -943,8 +944,10 @@ function ensureDataShape() {
     ...structuredClone(defaultData.settings),
     ...(data.settings || {})
   };
+  if (!Array.isArray(data.settings.googleImportHistory)) data.settings.googleImportHistory = [];
   if (!Array.isArray(data.topicPlans)) data.topicPlans = [];
   if (!Array.isArray(data.actualLectures)) data.actualLectures = [];
+  if (!Array.isArray(data.notifications)) data.notifications = [];
   if (!data.dateTimeSlots || typeof data.dateTimeSlots !== "object" || Array.isArray(data.dateTimeSlots)) data.dateTimeSlots = {};
   defaultData.centres.forEach((centre) => {
     if (!data.centres.includes(centre)) data.centres.push(centre);
@@ -1744,6 +1747,55 @@ function requestCloudData(url, timeoutMs = 12000) {
   });
 }
 
+function googleImportedSlots(sourceData = data) {
+  return (sourceData.slots || []).filter((slot) => String(slot.importSource || "").startsWith(googleSheetSource.importSource));
+}
+
+function latestGoogleImportAt(sourceData = data) {
+  return (sourceData.settings?.googleImportHistory || [])
+    .map((item) => item.importedAt || "")
+    .sort()
+    .pop() || "";
+}
+
+function preserveNewerLocalGoogleImports(localData, cloudData) {
+  const localImportAt = latestGoogleImportAt(localData);
+  const cloudImportAt = latestGoogleImportAt(cloudData);
+  if (!localImportAt || localImportAt <= cloudImportAt) return cloudData;
+
+  const localSlots = googleImportedSlots(localData);
+  if (!localSlots.length) return cloudData;
+
+  const slotRangeKeys = new Set(localSlots.map((slot) => {
+    const batch = (localData.batches || []).find((item) => item.id === slot.batchId);
+    return `${batchProgram(batch)}|${slot.date}`;
+  }));
+  const localBatchIds = new Set(localSlots.map((slot) => slot.batchId));
+  const localProfessorIds = new Set(localSlots.map((slot) => slot.professorId).filter(Boolean));
+  const merged = structuredClone(cloudData);
+
+  merged.batches = [
+    ...(merged.batches || []).filter((batch) => !localBatchIds.has(batch.id)),
+    ...(localData.batches || []).filter((batch) => localBatchIds.has(batch.id))
+  ];
+  merged.professors = [
+    ...(merged.professors || []).filter((professor) => !localProfessorIds.has(professor.id)),
+    ...(localData.professors || []).filter((professor) => localProfessorIds.has(professor.id))
+  ];
+  merged.slots = [
+    ...(merged.slots || []).filter((slot) => {
+      const batch = (merged.batches || []).find((item) => item.id === slot.batchId);
+      return !slotRangeKeys.has(`${batchProgram(batch)}|${slot.date}`);
+    }),
+    ...localSlots
+  ];
+  merged.settings = {
+    ...(merged.settings || {}),
+    googleImportHistory: localData.settings.googleImportHistory
+  };
+  return merged;
+}
+
 async function loadCloudData() {
   const url = requireCloudSyncUrl();
   if (!url) return;
@@ -1761,7 +1813,8 @@ async function loadCloudData() {
       alert("No cloud data is saved yet. Press Cloud Save from your main computer first.");
       return;
     }
-    data = { ...structuredClone(defaultData), ...response.data };
+    const localBeforeLoad = structuredClone(data);
+    data = { ...structuredClone(defaultData), ...preserveNewerLocalGoogleImports(localBeforeLoad, response.data) };
     ensureDataShape();
     data.settings.googleWebAppUrl = fixedCloudSyncUrl;
     saveData({ skipCloudSave: true });
@@ -3373,6 +3426,40 @@ function isChangedTT(item) {
   return item?.importSource === changedTTSource;
 }
 
+function notifyProfessorChange(professorId, slot, oldSlot = null, reason = "Timetable changed") {
+  if (!professorId || !slot) return;
+  const batch = batchById(slot.batchId);
+  const oldText = oldSlot
+    ? `${fullDateLabel(oldSlot.date)} ${formatTimeRange(oldSlot.start, oldSlot.end)} | ${batchById(oldSlot.batchId)?.name || ""} | ${oldSlot.noLecture ? "No Lecture" : paperShort(batchById(oldSlot.batchId)?.level, slotSubject(oldSlot))}`
+    : "";
+  const newText = `${fullDateLabel(slot.date)} ${formatTimeRange(slot.start, slot.end)} | ${batch?.name || ""} | ${slot.noLecture ? "No Lecture" : paperShort(batch?.level, slotSubject(slot))}`;
+  data.notifications.unshift({
+    id: uid("ntf"),
+    professorId,
+    slotId: slot.id,
+    createdAt: new Date().toISOString(),
+    reason,
+    oldText,
+    newText,
+    read: false
+  });
+  data.notifications = data.notifications.slice(0, 250);
+}
+
+function renderProfessorNotifications(professorId) {
+  const panel = $("#professorNotifications");
+  if (!panel) return;
+  const rows = (data.notifications || [])
+    .filter((item) => item.professorId === professorId)
+    .slice(0, 8);
+  panel.innerHTML = rows.length ? rows.map((item) => `<article class="professor-notification ${item.read ? "" : "unread"}">
+    <strong>${escapeHtml(item.reason)}</strong>
+    <span>${escapeHtml(new Date(item.createdAt).toLocaleString())}</span>
+    ${item.oldText ? `<small>Old: ${escapeHtml(item.oldText)}</small>` : ""}
+    <small>New: ${escapeHtml(item.newText)}</small>
+  </article>`).join("") : `<div class="empty">No timetable change notifications for this professor.</div>`;
+}
+
 function sourceBadge(item) {
   if (isChangedTT(item)) return `<span class="status red">Changed</span>`;
   if (item?.importSource === "whatsapp-timetable-image-export") return `<span class="status blue">WHATSAPP</span>`;
@@ -3925,6 +4012,7 @@ function renderProfessorLogin() {
       <td><button class="tiny danger" data-delete-actual="${escapeHtml(entry.id)}" type="button">Delete</button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="10" class="empty">No actual lecture submitted by this professor yet.</td></tr>`;
+  renderProfessorNotifications(professorId);
   renderProfessorSelfTopicForm(professorId);
 }
 
@@ -4643,8 +4731,17 @@ function upsertChangesTTSlot(entry) {
     importSource: changedTTSource,
     changedAt: new Date().toISOString()
   };
-  if (existing) Object.assign(existing, next);
-  else data.slots.push({ id: uid("chg"), ...next });
+  if (existing) {
+    const oldSlot = { ...existing };
+    Object.assign(existing, next);
+    if (oldSlot.professorId) notifyProfessorChange(oldSlot.professorId, existing, oldSlot, "Lecture changed");
+    if (existing.professorId && existing.professorId !== oldSlot.professorId) notifyProfessorChange(existing.professorId, existing, oldSlot, "New changed lecture assigned");
+  }
+  else {
+    const created = { id: uid("chg"), ...next };
+    data.slots.push(created);
+    if (created.professorId) notifyProfessorChange(created.professorId, created, null, "New changed lecture assigned");
+  }
   const dateSlots = timeSlotsForDate(entry.date);
   if (!dateSlots.some((slot) => slot.start === entry.start && slot.end === entry.end)) {
     setTimeSlotsForDate(entry.date, [...dateSlots, { start: entry.start, end: entry.end }]);
@@ -4802,6 +4899,15 @@ async function importGoogleSheetTimetable() {
       throw new Error(`No timetable rows found for ${range.from} to ${range.to}.${availableText}`);
     }
     applyGoogleSheetEntries(entries, range);
+    data.settings.googleImportHistory.unshift({
+      importedAt: new Date().toISOString(),
+      program: activeProgram(),
+      from: range.from,
+      to: range.to,
+      count: entries.length,
+      sheetLink: data.settings.googleSheetLink || sheetLink
+    });
+    data.settings.googleImportHistory = data.settings.googleImportHistory.slice(0, 20);
     saveData();
     alert(`Imported ${entries.length} Google Sheet timetable rows for ${range.from} to ${range.to}. Existing timetable rows for this week were replaced.\n\nNow press Cloud Save and wait for "saved and verified".`);
   } catch (error) {
@@ -4832,6 +4938,7 @@ function updateWeeklySlot(event) {
     item.start === start &&
     item.end === end
   );
+  const oldSlot = slot ? { ...slot } : null;
 
   if (!slot) {
     slot = {
@@ -4851,6 +4958,7 @@ function updateWeeklySlot(event) {
       slot.noLecture = true;
       slot.professorId = "";
       slot.subject = "No Lecture";
+      if (oldSlot?.professorId) notifyProfessorChange(oldSlot.professorId, slot, oldSlot, "Lecture cancelled / no lecture");
       saveData();
       return;
     }
@@ -4868,7 +4976,11 @@ function updateWeeklySlot(event) {
   }
 
   if (!slot.professorId) {
+    if (oldSlot?.professorId) notifyProfessorChange(oldSlot.professorId, { ...slot, professorId: "", noLecture: true, subject: "No Lecture" }, oldSlot, "Lecture removed");
     data.slots = data.slots.filter((item) => item.id !== slot.id);
+  } else {
+    if (oldSlot?.professorId) notifyProfessorChange(oldSlot.professorId, slot, oldSlot, "Lecture changed");
+    if (slot.professorId && slot.professorId !== oldSlot?.professorId) notifyProfessorChange(slot.professorId, slot, oldSlot, "New lecture assigned");
   }
   saveData();
 }
@@ -5102,6 +5214,88 @@ function downloadProfessorImage() {
   link.download = `${professor.name}_schedule.svg`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function professorWeeklyPrintableRows(professorId) {
+  return professorWeekSlots(professorId, selectedWeekStart)
+    .map((slot) => {
+      const batch = batchById(slot.batchId);
+      const topics = professorSlotTopicLines(slot);
+      return {
+        date: timetableDateLabel(slot.date),
+        start: timetableDisplayTime(slot, "start"),
+        end: timetableDisplayTime(slot, "end"),
+        lecture: [professorName(professorId), timetableSubjectLabel(slot, batch), ...topics.map((topic) => `Topic: ${topic}`)].filter(Boolean),
+        batch: batchTimetableLines(batch).filter(Boolean)
+      };
+    });
+}
+
+function professorWeeklySvg(professorId) {
+  const professor = data.professors.find((item) => item.id === professorId);
+  if (!professor) return "";
+  const rows = professorWeeklyPrintableRows(professorId);
+  const rowHeight = 92;
+  const width = 1092;
+  const headingHeight = 78;
+  const headerHeight = 54;
+  const bodyHeight = Math.max(rowHeight, rows.length * rowHeight);
+  const height = headingHeight + headerHeight + bodyHeight;
+  const columns = [0, 218, 326, 432, 802, 1092];
+  const textLines = (lines, x, y, w, size = 18) => lines.slice(0, 3).map((line, index) =>
+    `<text x="${x + w / 2}" y="${y + 28 + index * 22}" text-anchor="middle" font-size="${size}" font-weight="700" fill="#000">${svgEscape(line)}</text>`
+  ).join("");
+  const body = rows.length ? rows.map((row, index) => {
+    const y = headingHeight + headerHeight + index * rowHeight;
+    return `
+      <rect x="0" y="${y}" width="${width}" height="${rowHeight}" fill="#fff"/>
+      <rect x="${columns[3]}" y="${y}" width="${columns[4] - columns[3]}" height="${rowHeight}" fill="#d7ebff"/>
+      <rect x="${columns[4]}" y="${y}" width="${columns[5] - columns[4]}" height="${rowHeight}" fill="#f4e2ca"/>
+      <text x="12" y="${y + 52}" font-size="22" font-weight="700" fill="#000">${svgEscape(row.date)}</text>
+      <text x="${columns[1] + 12}" y="${y + 52}" font-size="22" font-weight="700" fill="#000">${svgEscape(row.start)}</text>
+      <text x="${columns[2] + 12}" y="${y + 52}" font-size="22" font-weight="700" fill="#000">${svgEscape(row.end)}</text>
+      ${textLines(row.lecture, columns[3], y, columns[4] - columns[3])}
+      ${textLines(row.batch, columns[4], y, columns[5] - columns[4])}`;
+  }).join("") : `<text x="24" y="${headingHeight + headerHeight + 52}" font-size="26" fill="#647084">No lectures scheduled for this week.</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="${width}" height="${height}" fill="#fff"/>
+    <rect x="0" y="0" width="${width}" height="${headingHeight}" fill="#e7abc8"/>
+    <rect x="0" y="${headingHeight}" width="${width}" height="${headerHeight}" fill="#d9e4f2"/>
+    <text x="${width / 2}" y="32" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="27" font-weight="700" fill="#000">${svgEscape(professor.name)}</text>
+    <text x="${width / 2}" y="60" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="22" font-weight="700" fill="#000">${svgEscape(fullDateLabel(selectedWeekStart))} to ${svgEscape(fullDateLabel(addDays(selectedWeekStart, 6)))}</text>
+    <text x="${(columns[0] + columns[1]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-size="21" font-weight="700">Date</text>
+    <text x="${(columns[1] + columns[2]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-size="21" font-weight="700">Time In</text>
+    <text x="${(columns[2] + columns[3]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-size="21" font-weight="700">Time Out</text>
+    <text x="${(columns[3] + columns[4]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-size="21" font-weight="700">Lecture Details</text>
+    <text x="${(columns[4] + columns[5]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-size="21" font-weight="700">Batch Details</text>
+    <g font-family="'Times New Roman', Georgia, serif">${body}</g>
+    <g stroke="#000" stroke-width="2" fill="none">
+      <rect x="0" y="0" width="${width}" height="${height}"/>
+      ${columns.slice(1, -1).map((x) => `<line x1="${x}" y1="${headingHeight}" x2="${x}" y2="${height}"/>`).join("")}
+      <line x1="0" y1="${headingHeight}" x2="${width}" y2="${headingHeight}"/>
+      <line x1="0" y1="${headingHeight + headerHeight}" x2="${width}" y2="${headingHeight + headerHeight}"/>
+      ${Array.from({ length: rows.length + 1 }, (_, index) => `<line x1="0" y1="${headingHeight + headerHeight + index * rowHeight}" x2="${width}" y2="${headingHeight + headerHeight + index * rowHeight}"/>`).join("")}
+    </g>
+  </svg>`;
+}
+
+function openProfessorWeeklyImage() {
+  const professorId = loggedInProfessorId() || $("#professorLoginSelect")?.value;
+  const svg = professorWeeklySvg(professorId);
+  if (!svg) return;
+  const blob = new Blob([svg], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+}
+
+function openProfessorWeeklyPdf() {
+  const professorId = loggedInProfessorId() || $("#professorLoginSelect")?.value;
+  const svg = professorWeeklySvg(professorId);
+  if (!svg) return;
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`<html><head><title>Professor Weekly Timetable</title><style>body{margin:20px;font-family:Arial,sans-serif}svg{max-width:100%;height:auto}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Print / Save PDF</button>${svg}</body></html>`);
+  win.document.close();
 }
 
 function addProgress(event) {
@@ -5477,6 +5671,8 @@ function bindEvents() {
     renderProfessorLogin();
   });
   $("#professorLoginSelect").addEventListener("change", renderProfessorLogin);
+  $("#professorViewImageBtn")?.addEventListener("click", openProfessorWeeklyImage);
+  $("#professorPrintPdfBtn")?.addEventListener("click", openProfessorWeeklyPdf);
   $("#professorActualForm").addEventListener("change", (event) => {
     if (event.target.name === "slotId") renderProfessorLogin();
     if (event.target.name === "topicPlanId") {
