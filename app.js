@@ -4111,6 +4111,46 @@ function renderWeeklyInsights(dates, visibleBatches, activeTimeSlots) {
   </div>`;
 }
 
+function weeklyAssignmentOptions(batch, date, timeSlot, currentSlot, selectedProfessorId = "", selectedSubject = "") {
+  const options = [
+    `<option value="">Open</option>`,
+    `<option value="__no_lecture__" ${currentSlot?.noLecture ? "selected" : ""}>No Lecture</option>`
+  ];
+  const levelPapers = papersForLevel(batch.level);
+  const candidateSlots = data.slots.filter((slot) =>
+    slot.id !== currentSlot?.id &&
+    slot.date === date &&
+    slotsOverlap({ date, start: timeSlot.start, end: timeSlot.end }, slot)
+  );
+  activeProgramProfessors()
+    .filter((professor) => professor.levels.includes(batch.level))
+    .flatMap((professor) => professor.papers
+      .filter((paper) => levelPapers.includes(paper))
+      .map((paper) => ({ professorId: professor.id, professorName: professor.name, paper }))
+    )
+    .filter((option) => option.professorId === selectedProfessorId || !candidateSlots.some((slot) => slotProfessorId(slot) === option.professorId))
+    .forEach((option) => {
+      const value = `${option.professorId}||${option.paper}`;
+      const selected = option.professorId === selectedProfessorId && option.paper === selectedSubject ? "selected" : "";
+      options.push(`<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(`${option.professorName} : ${paperShort(batch.level, option.paper)}`)}</option>`);
+    });
+  return options.join("");
+}
+
+function compactWeeklyAssignmentOptions(batch, currentSlot, selectedProfessorId = "", selectedSubject = "") {
+  const options = [`<option value="">Open</option>`];
+  if (currentSlot?.noLecture) {
+    options.push(`<option value="__no_lecture__" selected>No Lecture</option>`);
+  } else {
+    options.push(`<option value="__no_lecture__">No Lecture</option>`);
+  }
+  if (selectedProfessorId && selectedSubject) {
+    const value = `${selectedProfessorId}||${selectedSubject}`;
+    options.push(`<option value="${escapeHtml(value)}" selected>${escapeHtml(`${professorName(selectedProfessorId)} : ${paperShort(batch.level, selectedSubject)}`)}</option>`);
+  }
+  return options.join("");
+}
+
 function renderWeeklyTable() {
   $("#weekStart").value = selectedWeekStart;
   const selectedDays = selectedValues($("#dayFilter"));
@@ -4132,42 +4172,6 @@ function renderWeeklyTable() {
   }
   renderWeeklyInsights(dates, visibleBatches, activeTimeSlots);
   const slotsByCell = new Map(data.slots.map((slot) => [`${slot.batchId}|${slot.date}|${slot.start}|${slot.end}`, slot]));
-  const activeProfessors = activeProgramProfessors();
-  const professorOptionsByLevel = new Map();
-  levelsForProgram().forEach((level) => {
-    const levelPapers = papersForLevel(level);
-    professorOptionsByLevel.set(level, activeProfessors
-      .filter((professor) => professor.levels.includes(level))
-      .flatMap((professor) => {
-        const papers = professor.papers.filter((paper) => levelPapers.includes(paper));
-        return (papers.length ? papers : []).map((paper) => ({
-          professorId: professor.id,
-          professorName: professor.name,
-          paper,
-          label: `${professor.name} : ${paperShort(level, paper)}`
-        }));
-      }));
-  });
-  const assignmentOptions = (batch, date, timeSlot, currentSlot, selectedProfessorId = "", selectedSubject = "") => {
-    const options = [
-      `<option value="">Open</option>`,
-      `<option value="__no_lecture__" ${currentSlot?.noLecture ? "selected" : ""}>No Lecture</option>`
-    ];
-    const candidateSlots = data.slots.filter((slot) =>
-      slot.id !== currentSlot?.id &&
-      slot.date === date &&
-      slotsOverlap({ date, start: timeSlot.start, end: timeSlot.end }, slot)
-    );
-    (professorOptionsByLevel.get(batch.level) || [])
-      .filter((option) => option.professorId === selectedProfessorId || !candidateSlots.some((slot) => slotProfessorId(slot) === option.professorId))
-      .forEach((option) => {
-        const value = `${option.professorId}||${option.paper}`;
-        const selected = option.professorId === selectedProfessorId && option.paper === selectedSubject ? "selected" : "";
-        options.push(`<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(option.label)}</option>`);
-      });
-    return options.join("");
-    };
-
   const slotsForBoardCell = (batchId, date, timeSlot) => slotsByCell.get(`${batchId}|${date}|${timeSlot.start}|${timeSlot.end}`);
 
   $("#weeklyHead").innerHTML = `<tr>
@@ -4189,7 +4193,7 @@ function renderWeeklyTable() {
   $("#weeklyTable").innerHTML = dates.flatMap((date) => {
     const visibleTimeSlots = boardTimeSlotsForDate(date, activeTimeSlots);
     return visibleTimeSlots.map((timeSlot, slotIndex) => {
-      const dateCell = `<td class="weekly-date-col"><strong>${escapeHtml(dateLabel(date))}</strong></td>`;
+      const dateCell = `<td class="weekly-date-col"><strong>${escapeHtml(dayLabel(date))}</strong></td>`;
       const cells = visibleBatches.map((batch) => {
         const slot = slotsForBoardCell(batch.id, date, timeSlot);
         const professorId = slotProfessorId(slot || { batchId: batch.id, professorId: "" });
@@ -4211,8 +4215,8 @@ function renderWeeklyTable() {
         return `<td style="background:${escapeHtml(cellTint(batchColor(batch)))}">
           <div class="weekly-cell ${cellClass}">
             ${meta}
-            <select class="assignment-select" ${assignmentStyle} data-weekly-cell="1" data-field="assignment" data-batch-id="${escapeHtml(batch.id)}" data-date="${escapeHtml(date)}" data-start="${escapeHtml(timeSlot.start)}" data-end="${escapeHtml(timeSlot.end)}">
-              ${assignmentOptions(batch, date, timeSlot, slot, filled ? professorId : "", subject)}
+            <select class="assignment-select" ${assignmentStyle} data-weekly-cell="1" data-field="assignment" data-options-loaded="0" data-batch-id="${escapeHtml(batch.id)}" data-date="${escapeHtml(date)}" data-start="${escapeHtml(timeSlot.start)}" data-end="${escapeHtml(timeSlot.end)}">
+              ${compactWeeklyAssignmentOptions(batch, slot, filled ? professorId : "", subject)}
             </select>
             <div class="weekly-badges">
               ${isDummy(slot) ? dummyBadge(slot) : ""}
@@ -5955,6 +5959,29 @@ function bindEvents() {
   });
   $("#telegramBatchShareBtn").addEventListener("click", sendSelectedBatchTelegram);
   $("#telegramProfessorShareBtn").addEventListener("click", () => openTelegramShare($("#professorShareText").value));
+  $("#weeklyTable").addEventListener("focusin", (event) => {
+    if (!event.target.matches(".assignment-select") || event.target.dataset.optionsLoaded === "1") return;
+    const select = event.target;
+    const batch = batchById(select.dataset.batchId);
+    if (!batch) return;
+    const slot = data.slots.find((item) =>
+      item.batchId === select.dataset.batchId &&
+      item.date === select.dataset.date &&
+      item.start === select.dataset.start &&
+      item.end === select.dataset.end
+    );
+    const professorId = slotProfessorId(slot || { batchId: batch.id, professorId: "" });
+    const subject = slot ? slotSubject(slot) : "";
+    select.innerHTML = weeklyAssignmentOptions(
+      batch,
+      select.dataset.date,
+      { start: select.dataset.start, end: select.dataset.end },
+      slot,
+      professorId,
+      subject
+    );
+    select.dataset.optionsLoaded = "1";
+  });
   $("#weeklyTable").addEventListener("change", updateWeeklySlot);
   $("#addWeeklyRowBtn").addEventListener("click", addWeeklyRow);
   $("#googleSheetLinkInput").addEventListener("change", (event) => {
