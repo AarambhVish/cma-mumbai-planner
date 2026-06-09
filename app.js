@@ -2915,13 +2915,96 @@ function professorShareMessage(professorId) {
   ].join("\n");
 }
 
+function locationSlots(centre) {
+  return slotsForCurrentWeek({ applyWeeklyFilters: false })
+    .filter((slot) => batchById(slot.batchId)?.centre === centre)
+    .sort((a, b) => `${a.date} ${a.start} ${batchById(a.batchId)?.name || ""}`.localeCompare(`${b.date} ${b.start} ${batchById(b.batchId)?.name || ""}`));
+}
+
+function locationShareMessage(centre) {
+  if (!centre) return "";
+  const lines = locationSlots(centre).map((slot) => slotLine(slot, true, true));
+  return [
+    `${centre} Branch Timetable`,
+    `Week: ${fullDateLabel(selectedWeekStart)} to ${fullDateLabel(addDays(selectedWeekStart, 6))}`,
+    "",
+    lines.length ? lines.join("\n") : "No lectures scheduled for this branch in the selected week/filter."
+  ].join("\n");
+}
+
+function renderLocationPreview(centre) {
+  if (!centre) {
+    $("#locationTimetablePreview").innerHTML = `<div class="tt-empty">Select a location.</div>`;
+    renderInfoTable("#locationShareInfo", "Location Information", []);
+    return;
+  }
+  const slots = locationSlots(centre);
+  const lectureSlots = slots.filter((slot) => slotProfessorId(slot));
+  const noLectureSlots = slots.filter((slot) => slot.noLecture);
+  const batches = [...new Set(slots.map((slot) => batchById(slot.batchId)?.name).filter(Boolean))];
+  const professors = [...new Set(lectureSlots.map((slot) => professorName(slotProfessorId(slot))))];
+  const totalHours = lectureSlots.reduce((sum, slot) => sum + hoursBetween(slot.start, slot.end), 0);
+  const items = slots.map((slot) => {
+    const batch = batchById(slot.batchId);
+    const professorId = slotProfessorId(slot);
+    const subject = timetableSubjectLabel(slot, batch);
+    const teacher = slot.noLecture ? "No Lecture" : professorName(professorId);
+    const batchLines = batchTimetableLines(batch).filter(Boolean);
+    return `<tr>
+      <td class="tt-date-col">${escapeHtml(timetableDateLabel(slot.date))}</td>
+      <td class="tt-time-col">${escapeHtml(timetableDisplayTime(slot, "start"))}</td>
+      <td class="tt-time-col">${escapeHtml(timetableDisplayTime(slot, "end"))}</td>
+      <td class="tt-batch-detail-col" style="background:${escapeHtml(timetableLectureTone(slot, batchTimetableTone(batch)))}">
+        ${batchLines.map((line) => `<strong>${escapeHtml(line)}</strong>`).join("")}
+      </td>
+      <td class="tt-faculty-col tt-lecture-col" style="background:${escapeHtml(timetableLectureTone(slot, professorTimetableTone(professorId)))}">
+        <strong>${escapeHtml(teacher)}</strong>
+        <span>${escapeHtml(subject)}</span>
+      </td>
+    </tr>`;
+  }).join("");
+
+  $("#locationTimetablePreview").innerHTML = `
+    <div class="tt-fit-wrap">
+      <div class="tt-batch-heading" style="background:#d6eef2">
+        <strong>${escapeHtml(centre)} Branch</strong>
+        <span>${escapeHtml(fullDateLabel(selectedWeekStart))} to ${escapeHtml(fullDateLabel(addDays(selectedWeekStart, 6)))}</span>
+      </div>
+      <table class="tt-format-table" aria-label="Locationwise timetable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Time In</th>
+            <th>Time Out</th>
+            <th>Batch Details</th>
+            <th>Lecture Details</th>
+          </tr>
+        </thead>
+        <tbody>${items || `<tr><td class="tt-empty-cell" colspan="5">No lectures scheduled for this location.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+  renderInfoTable("#locationShareInfo", "Location Information", [
+    ["Location", centre],
+    ["Week", `${fullDateLabel(selectedWeekStart)} to ${fullDateLabel(addDays(selectedWeekStart, 6))}`],
+    ["Lectures", String(lectureSlots.length)],
+    ["Faculty Hrs", `${totalHours.toFixed(1)} hrs`],
+    ["Batches", batches.join(", ") || "-"],
+    ["Professors", professors.join(", ") || "-"],
+    ["No Lecture", String(noLectureSlots.length)]
+  ]);
+}
+
 function renderSharePanels() {
   const batches = [...activeProgramBatches()].sort((a, b) => a.name.localeCompare(b.name));
   const professors = activeProgramProfessors();
+  const locations = [...new Set(activeProgramBatches().map((batch) => batch.centre).filter(Boolean))].sort();
   const batchSelect = $("#batchShareSelect");
   const professorSelect = $("#professorShareSelect");
+  const locationSelect = $("#locationShareSelect");
   const currentBatch = batchSelect.value;
   const currentProfessor = professorSelect.value;
+  const currentLocation = locationSelect?.value;
 
   batchSelect.innerHTML = batches.map((batch) => `<option value="${escapeHtml(batch.id)}">${escapeHtml(batch.name)}</option>`).join("");
   if (batches.some((batch) => batch.id === currentBatch)) batchSelect.value = currentBatch;
@@ -2929,10 +3012,17 @@ function renderSharePanels() {
   professorSelect.innerHTML = professors.map((professor) => `<option value="${escapeHtml(professor.id)}">${escapeHtml(professor.name)}</option>`).join("");
   if (professors.some((professor) => professor.id === currentProfessor)) professorSelect.value = currentProfessor;
 
+  if (locationSelect) {
+    locationSelect.innerHTML = locations.map((centre) => `<option value="${escapeHtml(centre)}">${escapeHtml(centre)}</option>`).join("");
+    if (locations.includes(currentLocation)) locationSelect.value = currentLocation;
+  }
+
   $("#batchShareText").value = batchShareMessage(batchSelect.value);
   $("#professorShareText").value = professorShareMessage(professorSelect.value);
+  if ($("#locationShareText")) $("#locationShareText").value = locationShareMessage(locationSelect?.value || "");
   renderBatchPreview(batchSelect.value);
   renderProfessorPreview(professorSelect.value);
+  renderLocationPreview(locationSelect?.value || "");
 }
 
 function topicById(id) {
@@ -5271,7 +5361,9 @@ async function copyTimetableImage(selector) {
     if (shareSvg) {
       const fileName = selector === "#batchTimetablePreview"
         ? `${slug(batchById($("#batchShareSelect").value)?.name || "batch")}-timetable.svg`
-        : `${slug(data.professors.find((item) => item.id === $("#professorShareSelect").value)?.name || "professor")}-timetable.svg`;
+        : selector === "#locationTimetablePreview"
+          ? `${slug($("#locationShareSelect")?.value || "location")}-branch-timetable.svg`
+          : `${slug(data.professors.find((item) => item.id === $("#professorShareSelect").value)?.name || "professor")}-timetable.svg`;
       downloadBlob(new Blob([shareSvg], { type: "image/svg+xml" }), fileName);
       alert("Your browser blocked image copy, so I downloaded the timetable image file instead. You can attach it in WhatsApp.");
       return;
@@ -5297,6 +5389,9 @@ function selectedTimetableShareSvg(selector) {
   if (selector === "#professorTimetablePreview") {
     const professor = data.professors.find((item) => item.id === $("#professorShareSelect").value);
     return professorTimetableSvg(professor);
+  }
+  if (selector === "#locationTimetablePreview") {
+    return locationTimetableSvg($("#locationShareSelect")?.value || "");
   }
   return "";
 }
@@ -5559,6 +5654,87 @@ async function downloadProfessorImage() {
     downloadBlob(png, `${professor.name}_schedule.png`);
   } catch (error) {
     downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${professor.name}_schedule.svg`);
+  }
+}
+
+function locationTimetableSvg(centre) {
+  if (!centre) return "";
+  const slots = locationSlots(centre);
+  const width = 1220;
+  const headingHeight = 78;
+  const headerHeight = 54;
+  const columns = [0, 220, 330, 440, 770, 1220];
+  const rowData = slots.map((slot) => {
+    const batch = batchById(slot.batchId);
+    const professorId = slotProfessorId(slot);
+    const batchLines = batchTimetableLines(batch).filter(Boolean);
+    const lectureLines = [slot.noLecture ? "No Lecture" : professorName(professorId), timetableSubjectLabel(slot, batch)].filter(Boolean);
+    return {
+      slot,
+      batch,
+      professorId,
+      batchLines,
+      lectureLines,
+      height: Math.max(85, 38 + Math.max(batchLines.length, lectureLines.length) * 24)
+    };
+  });
+  const bodyHeight = rowData.length ? rowData.reduce((sum, row) => sum + row.height, 0) : 85;
+  const height = headingHeight + headerHeight + bodyHeight;
+  const textBlock = (lines, x, y, widthValue, lineHeight, size, weight = 700) => lines.map((line, index) =>
+    `<text x="${x + widthValue / 2}" y="${y + 29 + index * lineHeight}" text-anchor="middle" font-size="${size}" font-weight="${weight}" fill="#000">${svgEscape(line)}</text>`
+  ).join("");
+  let nextY = headingHeight + headerHeight;
+  const rowLines = [];
+  const rows = rowData.length ? rowData.map((row) => {
+    const y = nextY;
+    nextY += row.height;
+    rowLines.push(y);
+    return `
+      <rect x="${columns[0]}" y="${y}" width="${columns[1] - columns[0]}" height="${row.height}" fill="#fff"/>
+      <rect x="${columns[1]}" y="${y}" width="${columns[2] - columns[1]}" height="${row.height}" fill="#fff"/>
+      <rect x="${columns[2]}" y="${y}" width="${columns[3] - columns[2]}" height="${row.height}" fill="#fff"/>
+      <rect x="${columns[3]}" y="${y}" width="${columns[4] - columns[3]}" height="${row.height}" fill="${svgEscape(timetableLectureTone(row.slot, batchTimetableTone(row.batch)))}"/>
+      <rect x="${columns[4]}" y="${y}" width="${columns[5] - columns[4]}" height="${row.height}" fill="${svgEscape(timetableLectureTone(row.slot, professorTimetableTone(row.professorId)))}"/>
+      <text x="12" y="${y + Math.min(53, row.height - 28)}" font-size="23" font-weight="700" fill="#000">${svgEscape(timetableDateLabel(row.slot.date))}</text>
+      <text x="${columns[1] + 12}" y="${y + Math.min(53, row.height - 28)}" font-size="23" font-weight="700" fill="#000">${svgEscape(timetableDisplayTime(row.slot, "start"))}</text>
+      <text x="${columns[2] + 12}" y="${y + Math.min(53, row.height - 28)}" font-size="23" font-weight="700" fill="#000">${svgEscape(timetableDisplayTime(row.slot, "end"))}</text>
+      ${textBlock(row.batchLines, columns[3], y, columns[4] - columns[3], 22, 18, 700)}
+      ${textBlock(row.lectureLines, columns[4], y, columns[5] - columns[4], 24, 20, 700)}
+    `;
+  }).join("") : `<text x="24" y="${headingHeight + headerHeight + 52}" font-size="26" fill="#647084">No lectures scheduled for this location.</text>`;
+  rowLines.push(headingHeight + headerHeight + bodyHeight);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="${width}" height="${height}" fill="#fff"/>
+    <rect x="0" y="0" width="${width}" height="${headingHeight}" fill="#d6eef2"/>
+    <rect x="0" y="${headingHeight}" width="${width}" height="${headerHeight}" fill="#d9e4f2"/>
+    <text x="${width / 2}" y="32" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="29" font-weight="700" fill="#000">${svgEscape(centre)} Branch</text>
+    <text x="${width / 2}" y="60" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="22" font-weight="700" fill="#000">${svgEscape(fullDateLabel(selectedWeekStart))} to ${svgEscape(fullDateLabel(addDays(selectedWeekStart, 6)))}</text>
+    <text x="${(columns[0] + columns[1]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="21" font-weight="700" fill="#000">Date</text>
+    <text x="${(columns[1] + columns[2]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="21" font-weight="700" fill="#000">Time In</text>
+    <text x="${(columns[2] + columns[3]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="21" font-weight="700" fill="#000">Time Out</text>
+    <text x="${(columns[3] + columns[4]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="21" font-weight="700" fill="#000">Batch Details</text>
+    <text x="${(columns[4] + columns[5]) / 2}" y="${headingHeight + 35}" text-anchor="middle" font-family="'Times New Roman', Georgia, serif" font-size="21" font-weight="700" fill="#000">Lecture Details</text>
+    <g font-family="'Times New Roman', Georgia, serif">${rows}</g>
+    <g stroke="#000" stroke-width="2" fill="none">
+      <rect x="0" y="0" width="${width}" height="${height}"/>
+      ${columns.slice(1, -1).map((x) => `<line x1="${x}" y1="${headingHeight}" x2="${x}" y2="${height}"/>`).join("")}
+      <line x1="0" y1="${headingHeight}" x2="${width}" y2="${headingHeight}"/>
+      <line x1="0" y1="${headingHeight + headerHeight}" x2="${width}" y2="${headingHeight + headerHeight}"/>
+      ${rowLines.map((y) => `<line x1="0" y1="${y}" x2="${width}" y2="${y}"/>`).join("")}
+    </g>
+  </svg>`;
+}
+
+async function downloadLocationImage() {
+  const centre = $("#locationShareSelect")?.value || "";
+  const svg = locationTimetableSvg(centre);
+  if (!svg) return;
+  try {
+    const png = await svgToPngBlob(svg);
+    if (!png) throw new Error("PNG could not be created.");
+    downloadBlob(png, `${slug(centre || "location")}_timetable.png`);
+  } catch (error) {
+    downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${slug(centre || "location")}_timetable.svg`);
   }
 }
 
@@ -5989,6 +6165,7 @@ function bindEvents() {
   });
   $("#batchShareSelect").addEventListener("change", renderSharePanels);
   $("#professorShareSelect").addEventListener("change", renderSharePanels);
+  $("#locationShareSelect")?.addEventListener("change", renderSharePanels);
   $("#professorAllocationLevel").addEventListener("change", renderProfessorPlanning);
   $("#professorAllocationAttempt").addEventListener("change", renderTopicPlanner);
   $("#professorPlanSelect").addEventListener("change", renderProfessorPlanning);
@@ -6033,8 +6210,10 @@ function bindEvents() {
   });
   $("#copyBatchShareBtn").addEventListener("click", () => copyTimetableImage("#batchTimetablePreview"));
   $("#copyProfessorShareBtn").addEventListener("click", () => copyTimetableImage("#professorTimetablePreview"));
+  $("#copyLocationShareBtn")?.addEventListener("click", () => copyTimetableImage("#locationTimetablePreview"));
   $("#downloadBatchImageBtn").addEventListener("click", downloadBatchImage);
   $("#downloadProfessorImageBtn").addEventListener("click", downloadProfessorImage);
+  $("#downloadLocationImageBtn")?.addEventListener("click", downloadLocationImage);
   $("#whatsappBatchShareBtn")?.addEventListener("click", () => {
     const batch = batchById($("#batchShareSelect").value);
     shareTimetableImageToWhatsApp("#batchTimetablePreview", `${slug(batch?.name || "batch")}-timetable.png`);
@@ -6042,6 +6221,10 @@ function bindEvents() {
   $("#whatsappProfessorShareBtn")?.addEventListener("click", () => {
     const professor = data.professors.find((item) => item.id === $("#professorShareSelect").value);
     shareTimetableImageToWhatsApp("#professorTimetablePreview", `${slug(professor?.name || "professor")}-timetable.png`);
+  });
+  $("#whatsappLocationShareBtn")?.addEventListener("click", () => {
+    const centre = $("#locationShareSelect")?.value || "location";
+    shareTimetableImageToWhatsApp("#locationTimetablePreview", `${slug(centre)}-branch-timetable.png`);
   });
   $("#telegramBatchShareBtn").addEventListener("click", sendSelectedBatchTelegram);
   $("#telegramProfessorShareBtn").addEventListener("click", () => openTelegramShare($("#professorShareText").value));
