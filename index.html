@@ -65,11 +65,6 @@
             <option value="contrast">High Contrast</option>
           </select>
         </label>
-        <button class="ghost" id="exportBtn" title="Export data">Export</button>
-        <label class="ghost file-trigger" title="Import data">
-          Import
-          <input id="importFile" type="file" accept="application/json">
-        </label>
         <button class="ghost" id="cloudLoadBtn" title="Load planner data from Google">Cloud Load</button>
         <button id="cloudSaveBtn" title="Save planner data to Google">Cloud Save</button>
         <span class="cloud-status" id="cloudStatus">Cloud not checked</span>
@@ -85,6 +80,7 @@
         <button class="tab" data-view="planner">Timetable</button>
         <button class="tab" data-view="professorPlanning">Professor Planning</button>
         <button class="tab" data-view="professorLogin">Professor Login</button>
+        <button class="tab" data-view="syllabus">Syllabus</button>
         <button class="tab" data-view="masters">Masters</button>
       </nav>
 
@@ -597,6 +593,26 @@ Professor : Sandesh Sir
           </div>
           <form id="professorSelfTopicForm" class="form-grid compact"></form>
         </section>
+        <section class="panel subject-head-syllabus-panel hidden" id="professorHeadSyllabusPanel">
+          <div class="panel-head">
+            <div>
+              <h2>Head Syllabus Completion</h2>
+              <span>Tick completed topics for your head papers. Admin dashboard uses the same data.</span>
+            </div>
+            <div class="row-actions">
+              <label>
+                Level / Attempt
+                <select id="professorHeadSyllabusFilter"></select>
+              </label>
+            </div>
+          </div>
+          <div class="table-wrap syllabus-wrap">
+            <table class="syllabus-grid">
+              <thead id="professorHeadSyllabusHead"></thead>
+              <tbody id="professorHeadSyllabusBody"></tbody>
+            </table>
+          </div>
+        </section>
         <section class="panel">
           <div class="panel-head">
             <h2>Actual Lecture Records</h2>
@@ -619,6 +635,31 @@ Professor : Sandesh Sir
                 </tr>
               </thead>
               <tbody id="professorActualTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="syllabusView">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Syllabus Tracker</h2>
+              <span>Topic completion by batch, with hours completed and pending.</span>
+            </div>
+            <div class="row-actions">
+              <label>
+                Level / Attempt
+                <select id="syllabusFilter"></select>
+              </label>
+              <button class="ghost" id="syllabusFullscreenBtn" type="button">Full Screen</button>
+            </div>
+          </div>
+          <div class="insight-grid compact-insights syllabus-insights" id="syllabusInsights"></div>
+          <div class="table-wrap syllabus-wrap">
+            <table class="syllabus-grid">
+              <thead id="syllabusHead"></thead>
+              <tbody id="syllabusBody"></tbody>
             </table>
           </div>
         </section>
@@ -714,6 +755,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260609-weekly-import-full"></script>
+    <script src="app.js?v=20260611-syllabus-grid"></script>
   </body>
 </html>

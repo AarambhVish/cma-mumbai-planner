@@ -940,15 +940,60 @@ function loadData() {
   }
 }
 
+function professorMasterBackupFor(professor) {
+  return {
+    name: professor.name,
+    speciality: professor.speciality || "",
+    home: professor.home || "Online",
+    levels: Array.isArray(professor.levels) ? [...professor.levels] : [],
+    papers: Array.isArray(professor.papers) ? [...professor.papers] : [],
+    headPaperNos: Array.isArray(professor.headPaperNos) ? professor.headPaperNos.map(normalizePaperNo).filter(Boolean) : [],
+    loginId: professor.loginId || "",
+    loginPassword: professor.loginPassword || "",
+    color: professor.color || ""
+  };
+}
+
+function rememberProfessorMasterBackup(professor, options = {}) {
+  if (!professor?.id) return;
+  if (!data.settings.professorMasterBackup || typeof data.settings.professorMasterBackup !== "object" || Array.isArray(data.settings.professorMasterBackup)) {
+    data.settings.professorMasterBackup = {};
+  }
+  if (options.onlyIfMissing && data.settings.professorMasterBackup[professor.id]) return;
+  data.settings.professorMasterBackup[professor.id] = professorMasterBackupFor(professor);
+}
+
+function restoreProfessorMasterBackups() {
+  const backups = data.settings.professorMasterBackup || {};
+  data.professors.forEach((professor) => {
+    const backup = backups[professor.id];
+    if (!backup) return;
+    const levels = [...new Set([...(professor.levels || []), ...(backup.levels || [])])];
+    const papers = [...new Set([...(professor.papers || []), ...(backup.papers || [])])];
+    professor.name = backup.name || professor.name;
+    professor.speciality = backup.speciality || professor.speciality;
+    professor.home = backup.home || professor.home;
+    professor.levels = levels.length ? levels : professor.levels;
+    professor.papers = papers.length ? papers : professor.papers;
+    professor.headPaperNos = Array.isArray(backup.headPaperNos) ? backup.headPaperNos.map(normalizePaperNo).filter(Boolean) : professor.headPaperNos;
+    professor.loginId = backup.loginId || professor.loginId;
+    professor.loginPassword = backup.loginPassword || professor.loginPassword;
+    professor.color = backup.color || professor.color;
+  });
+}
+
 function ensureDataShape() {
   data.settings = {
     ...structuredClone(defaultData.settings),
     ...(data.settings || {})
   };
   if (!Array.isArray(data.settings.googleImportHistory)) data.settings.googleImportHistory = [];
+  if (!data.settings.professorMasterBackup || typeof data.settings.professorMasterBackup !== "object" || Array.isArray(data.settings.professorMasterBackup)) data.settings.professorMasterBackup = {};
+  (data.professors || []).forEach((professor) => rememberProfessorMasterBackup(professor, { onlyIfMissing: true }));
   if (!Array.isArray(data.topicPlans)) data.topicPlans = [];
   if (!Array.isArray(data.actualLectures)) data.actualLectures = [];
   if (!Array.isArray(data.notifications)) data.notifications = [];
+  if (!data.syllabusCompletion || typeof data.syllabusCompletion !== "object" || Array.isArray(data.syllabusCompletion)) data.syllabusCompletion = {};
   if (!data.dateTimeSlots || typeof data.dateTimeSlots !== "object" || Array.isArray(data.dateTimeSlots)) data.dateTimeSlots = {};
   defaultData.centres.forEach((centre) => {
     if (!data.centres.includes(centre)) data.centres.push(centre);
@@ -1022,12 +1067,13 @@ function ensureDataShape() {
     ...professor,
     levels: Array.isArray(professor.levels) && professor.levels.length ? professor.levels : inferProfessorLevels(professor),
     papers: Array.isArray(professor.papers) && professor.papers.length ? professor.papers : inferProfessorPapers(professor),
-    headPaperNos: Array.isArray(professor.headPaperNos) ? professor.headPaperNos.map(Number).filter(Boolean) : [],
+    headPaperNos: Array.isArray(professor.headPaperNos) ? professor.headPaperNos.map(normalizePaperNo).filter(Boolean) : [],
     loginId: isOldAutoProfessorLogin(professor) ? professorFirstNameCredential(professor.name) : professor.loginId,
     loginPassword: isOldAutoProfessorPassword(professor) ? professorFirstNameCredential(professor.name) : professor.loginPassword,
     color: professor.color || professorPalette[data.professors.findIndex((item) => item.id === professor.id) % professorPalette.length]
   }));
   data.professors.forEach(cleanProfessorProgramMapping);
+  restoreProfessorMasterBackups();
   data.batches = data.batches.map((batch, index) => {
     const normalized = normalizeBatchProgram({ ...batch });
     return {
@@ -1289,6 +1335,11 @@ function paperNoOptions() {
     .map((number) => `P${number}`);
 }
 
+function normalizePaperNo(value) {
+  const number = Number(String(value ?? "").replace(/[^0-9]/g, ""));
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
 function activeProgram() {
   return programs[data.settings?.activeProgram] ? data.settings.activeProgram : "CMA India";
 }
@@ -1335,14 +1386,14 @@ function cleanProfessorProgramMapping(professor) {
     professor.papers = (professor.papers || []).filter((paper) => levelsForPaper(paper).some((level) => programForLevel(level) === "CMA India"));
     if (!professor.levels.length) professor.levels = [...indiaMaster.levels];
     if (!professor.papers.length) professor.papers = [...indiaMaster.papers];
-    professor.headPaperNos = (professor.headPaperNos || []).filter((paperNo) => Number(paperNo) < 100);
+    professor.headPaperNos = (professor.headPaperNos || []).map(normalizePaperNo).filter((paperNo) => paperNo && paperNo < 100);
     return;
   }
 
   const hasUsaPaper = (professor.papers || []).some((paper) => levelsForPaper(paper).some((level) => programForLevel(level) === "CMA USA"));
   if (!hasUsaPaper) {
     professor.levels = (professor.levels || []).filter((level) => programForLevel(level) !== "CMA USA");
-    professor.headPaperNos = (professor.headPaperNos || []).filter((paperNo) => Number(paperNo) < 100);
+    professor.headPaperNos = (professor.headPaperNos || []).map(normalizePaperNo).filter((paperNo) => paperNo && paperNo < 100);
   }
 }
 
@@ -1515,6 +1566,19 @@ function loggedInProfessorId() {
   return isProfessorMode() ? sessionStorage.getItem(loginProfessorKey) || "" : "";
 }
 
+function loggedInProfessor() {
+  const professorId = loggedInProfessorId();
+  return professorId ? data.professors.find((professor) => professor.id === professorId) : null;
+}
+
+function loggedInProfessorHeadPaperNos() {
+  return (loggedInProfessor()?.headPaperNos || []).map(normalizePaperNo).filter(Boolean);
+}
+
+function professorCanUseSyllabusTracker() {
+  return !isProfessorMode() || loggedInProfessorHeadPaperNos().length > 0;
+}
+
 function professorLoginId(professor) {
   return cleanSheetText(professor.loginId || professorFirstNameCredential(professor.name));
 }
@@ -1607,18 +1671,24 @@ function setUserTheme(theme) {
   renderUserTheme();
 }
 
-function updateWeeklyFullscreenButton() {
+function updateFullscreenButtons() {
   const button = $("#weeklyFullscreenBtn");
-  if (button) button.textContent = document.fullscreenElement ? "Exit Full Screen" : "Full Screen";
+  if (button) button.textContent = document.fullscreenElement === $("#weeklyView .panel") ? "Exit Full Screen" : "Full Screen";
+  const syllabusButton = $("#syllabusFullscreenBtn");
+  if (syllabusButton) syllabusButton.textContent = document.fullscreenElement === $("#syllabusView .panel") ? "Exit Full Screen" : "Full Screen";
 }
 
 function applyAccessMode() {
   const professorMode = isProfessorMode();
+  const subjectHeadMode = professorMode && professorCanUseSyllabusTracker();
   document.body.classList.toggle("professor-mode", professorMode);
+  document.body.classList.toggle("subject-head-mode", subjectHeadMode);
   $$(".tab").forEach((tab) => {
-    tab.classList.toggle("hidden", professorMode && tab.dataset.view !== "professorLogin");
+    const allowedForProfessor = tab.dataset.view === "professorLogin" || (subjectHeadMode && tab.dataset.view === "syllabus");
+    tab.classList.toggle("hidden", professorMode && !allowedForProfessor);
   });
-  if (professorMode) setActiveView("professorLogin");
+  const activeView = document.querySelector(".tab.active")?.dataset.view || "professorLogin";
+  if (professorMode && activeView !== "professorLogin" && !(subjectHeadMode && activeView === "syllabus")) setActiveView("professorLogin");
   const label = $("#professorLoginSelect")?.closest("label");
   if (label) label.classList.toggle("hidden", professorMode);
   const professorHeading = $("#professorLoginView .panel-head h2");
@@ -2195,18 +2265,45 @@ function daysLeft(targetDate) {
   return Math.max(0, Math.ceil((target - today) / 86400000));
 }
 
+function syllabusStatsForBatch(batch) {
+  if (!batch) return { completedHours: 0, totalHours: 0, pendingHours: 0, completedTopics: 0, pendingTopics: 0, percent: 0 };
+  let completedHours = 0;
+  let totalHours = 0;
+  let completedTopics = 0;
+  let pendingTopics = 0;
+  topicMaster.forEach((topic) => {
+    if (!topicAppliesToBatch(topic, batch)) return;
+    const hours = syllabusTopicHours(topic);
+    totalHours += hours;
+    if (isSyllabusTopicDone(batch.id, topic.id)) {
+      completedHours += hours;
+      completedTopics += 1;
+    } else {
+      pendingTopics += 1;
+    }
+  });
+  return {
+    completedHours,
+    totalHours,
+    pendingHours: Math.max(0, totalHours - completedHours),
+    completedTopics,
+    pendingTopics,
+    percent: totalHours ? (completedHours / totalHours) * 100 : 0
+  };
+}
+
 function doneHours(batchId) {
-  return data.progress
-    .filter((entry) => entry.batchId === batchId)
-    .reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
+  return syllabusStatsForBatch(batchById(batchId)).completedHours;
 }
 
 function batchMetrics(batch) {
-  const done = doneHours(batch.id);
-  const pending = Math.max(0, Number(batch.plannedHours) - done);
+  const syllabusStats = syllabusStatsForBatch(batch);
+  const done = syllabusStats.completedHours;
+  const plannedTarget = Number(batch.plannedHours || syllabusStats.totalHours || 0);
+  const pending = Math.max(0, plannedTarget - done);
   const left = daysLeft(batch.targetDate);
   const weeksLeft = Math.max(0, Math.ceil(left / 7));
-  const completionPercent = Number(batch.plannedHours) ? Math.min(100, (done / Number(batch.plannedHours)) * 100) : 0;
+  const completionPercent = Math.min(100, syllabusStats.percent || (plannedTarget ? (done / plannedTarget) * 100 : 0));
   const weeklyRequired = pending ? pending / Math.max(weeksLeft, 1) : 0;
   const availableWeeklyHours = slotsForBatchInRange(batch.id, selectedWeekStart, addDays(selectedWeekStart, 6))
     .reduce((sum, slot) => sum + hoursBetween(slot.start, slot.end), 0);
@@ -2225,7 +2322,7 @@ function batchMetrics(batch) {
     color = "yellow";
   }
 
-  return { done, pending, left, weeksLeft, weeklyRequired, completionPercent, availableWeeklyHours, availableLeft, status, color };
+  return { done, pending, left, weeksLeft, weeklyRequired, completionPercent, availableWeeklyHours, availableLeft, status, color, syllabusStats };
 }
 
 function slotsForBatchInRange(batchId, from, to) {
@@ -3079,6 +3176,194 @@ function plannedTopicText(plan) {
   return topic ? `P${topic.paperNo} ${topic.chapterName}` : "";
 }
 
+function topicLevelNames(topic) {
+  return allPapers()
+    .filter((paper) => paperNumbers[paper] === Number(topic?.paperNo))
+    .flatMap((paper) => levelsForPaper(paper));
+}
+
+function topicAppliesToBatch(topic, batch) {
+  return topicLevelNames(topic).includes(batch?.level);
+}
+
+function syllabusCompletionKey(batchId, topicId) {
+  return `${batchId}__${topicId}`;
+}
+
+function isSyllabusTopicDone(batchId, topicId) {
+  return Boolean(data.syllabusCompletion?.[syllabusCompletionKey(batchId, topicId)]);
+}
+
+function setSyllabusTopicDone(batchId, topicId, done) {
+  const key = syllabusCompletionKey(batchId, topicId);
+  if (done) data.syllabusCompletion[key] = true;
+  else delete data.syllabusCompletion[key];
+}
+
+function syllabusFilterValue(batch) {
+  return `${batch.level}__${batch.attempt}`;
+}
+
+function syllabusFilterLabel(value) {
+  if (value === "All") return "All Batches";
+  const [level, attempt] = value.split("__");
+  return `${level} ${attemptCode(attempt)}`;
+}
+
+function syllabusVisibleBatches() {
+  const filter = $("#syllabusFilter")?.value || "All";
+  const headPaperNos = isProfessorMode() ? loggedInProfessorHeadPaperNos() : [];
+  return activeProgramBatches()
+    .filter((batch) => !headPaperNos.length || papersForLevel(batch.level).some((paper) => headPaperNos.includes(Number(paperNumbers[paper]))))
+    .filter((batch) => filter === "All" || syllabusFilterValue(batch) === filter)
+    .sort((a, b) =>
+      levelOrder(a.level) - levelOrder(b.level) ||
+      String(a.attempt || "").localeCompare(String(b.attempt || "")) ||
+      String(a.centre || "").localeCompare(String(b.centre || "")) ||
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
+}
+
+function syllabusTopicHours(topic) {
+  return Number(topic?.standardHours || 0);
+}
+
+function renderSyllabusTracker(options = {}) {
+  const filter = $(options.filterSelector || "#syllabusFilter");
+  const head = $(options.headSelector || "#syllabusHead");
+  const body = $(options.bodySelector || "#syllabusBody");
+  const insights = $(options.insightsSelector || "#syllabusInsights");
+  const scopedHeadPaperNos = Array.isArray(options.headPaperNos) ? options.headPaperNos.map(normalizePaperNo).filter(Boolean) : null;
+  if (!filter || !head || !body) return;
+
+  const selected = filter.value || "All";
+  const headPaperNos = scopedHeadPaperNos || (isProfessorMode() ? loggedInProfessorHeadPaperNos() : []);
+  const availableBatches = activeProgramBatches()
+    .filter((batch) => !headPaperNos.length || papersForLevel(batch.level).some((paper) => headPaperNos.includes(Number(paperNumbers[paper]))));
+  const filterOptions = ["All", ...new Set(availableBatches.map(syllabusFilterValue))]
+    .sort((a, b) => {
+      if (a === "All") return -1;
+      if (b === "All") return 1;
+      const [aLevel, aAttempt] = a.split("__");
+      const [bLevel, bAttempt] = b.split("__");
+      return levelOrder(aLevel) - levelOrder(bLevel) || String(aAttempt).localeCompare(String(bAttempt));
+    });
+  filter.innerHTML = filterOptions.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(syllabusFilterLabel(value))}</option>`).join("");
+  if (![...filter.options].some((option) => option.value === selected)) filter.value = "All";
+
+  const batches = (options.batchProvider ? options.batchProvider() : syllabusVisibleBatches())
+    .filter((batch) => !headPaperNos.length || papersForLevel(batch.level).some((paper) => headPaperNos.includes(Number(paperNumbers[paper]))))
+    .filter((batch) => (filter.value || "All") === "All" || syllabusFilterValue(batch) === (filter.value || "All"));
+  const levels = new Set(batches.map((batch) => batch.level));
+  const topics = topicMaster
+    .filter((topic) => topicLevelNames(topic).some((level) => levels.has(level)))
+    .filter((topic) => !headPaperNos.length || headPaperNos.includes(Number(topic.paperNo)))
+    .sort((a, b) => Number(a.paperNo) - Number(b.paperNo) || String(a.chapterName).localeCompare(String(b.chapterName)));
+
+  const batchSyllabusStats = new Map();
+  batches.forEach((batch) => {
+    let totalHours = 0;
+    let completedHours = 0;
+    let completedCells = 0;
+    let pendingCells = 0;
+    topics.forEach((topic) => {
+      if (!topicAppliesToBatch(topic, batch)) return;
+      const hours = syllabusTopicHours(topic);
+      totalHours += hours;
+      if (isSyllabusTopicDone(batch.id, topic.id)) {
+        completedHours += hours;
+        completedCells += 1;
+      } else {
+        pendingCells += 1;
+      }
+    });
+    batchSyllabusStats.set(batch.id, {
+      totalHours,
+      completedHours,
+      pendingHours: Math.max(0, totalHours - completedHours),
+      completedCells,
+      pendingCells,
+      percent: totalHours ? (completedHours / totalHours) * 100 : 0
+    });
+  });
+  if (insights) {
+    insights.innerHTML = "";
+    insights.classList.add("hidden");
+  }
+
+  if (!batches.length) {
+    head.innerHTML = "";
+    body.innerHTML = `<tr><td class="empty">No batches found for this filter.</td></tr>`;
+    return;
+  }
+
+  head.innerHTML = `
+    <tr>
+      <th class="syllabus-paper-col">Paper</th>
+      <th class="syllabus-topic-col">Topic</th>
+      <th class="syllabus-hours-col">Std Hrs</th>
+      ${batches.map((batch) => {
+        const stats = batchSyllabusStats.get(batch.id) || { completedHours: 0, pendingHours: 0, percent: 0 };
+        return `
+          <th class="syllabus-batch-head">
+            ${escapeHtml(batch.name)}
+            <span>${escapeHtml(batch.level)} | ${escapeHtml(attemptCode(batch.attempt))} | ${escapeHtml(batch.centre)}</span>
+            <div class="syllabus-batch-stats">
+              <div><b>${stats.completedHours.toFixed(1)}</b><small>Done</small></div>
+              <div><b>${stats.pendingHours.toFixed(1)}</b><small>Pending</small></div>
+              <div><b>${stats.percent.toFixed(0)}%</b><small>Complete</small></div>
+            </div>
+          </th>
+        `;
+      }).join("")}
+    </tr>
+  `;
+
+  let lastPaperNo = "";
+  body.innerHTML = topics.map((topic) => {
+    const paperNo = Number(topic.paperNo);
+    const paperTitle = `${paperCodeLabel(paperNo)} | ${topic.paperName}`;
+    const paperRow = paperNo !== lastPaperNo
+      ? `<tr class="syllabus-paper-row"><th colspan="${3 + batches.length}">${escapeHtml(paperTitle)}</th></tr>`
+      : "";
+    lastPaperNo = paperNo;
+    const cells = batches.map((batch) => {
+      if (!topicAppliesToBatch(topic, batch)) return `<td class="syllabus-batch-cell syllabus-na">-</td>`;
+      const done = isSyllabusTopicDone(batch.id, topic.id);
+      return `
+        <td class="syllabus-batch-cell">
+          <button class="syllabus-toggle ${done ? "done" : "pending"}" type="button" data-syllabus-batch="${escapeHtml(batch.id)}" data-syllabus-topic="${escapeHtml(topic.id)}" aria-label="${done ? "Completed" : "Pending"} ${escapeHtml(topic.chapterName)} for ${escapeHtml(batch.name)}">${done ? "✓" : "×"}</button>
+        </td>
+      `;
+    }).join("");
+    return `
+      ${paperRow}
+      <tr>
+        <td class="syllabus-paper-cell">${escapeHtml(paperCodeLabel(paperNo))}</td>
+        <td class="syllabus-topic-cell">${escapeHtml(topic.chapterName)}</td>
+        <td class="syllabus-hours-cell">${syllabusTopicHours(topic).toFixed(1)}</td>
+        ${cells}
+      </tr>
+    `;
+  }).join("") || `<tr><td class="empty" colspan="${3 + batches.length}">No topics found for selected batches.</td></tr>`;
+}
+
+function renderProfessorHeadSyllabusPanel() {
+  const panel = $("#professorHeadSyllabusPanel");
+  if (!panel) return;
+  const headPaperNos = loggedInProfessorHeadPaperNos();
+  const isHead = isProfessorMode() && headPaperNos.length > 0;
+  panel.classList.toggle("hidden", !isHead);
+  if (!isHead) return;
+  renderSyllabusTracker({
+    filterSelector: "#professorHeadSyllabusFilter",
+    headSelector: "#professorHeadSyllabusHead",
+    bodySelector: "#professorHeadSyllabusBody",
+    headPaperNos,
+    batchProvider: activeProgramBatches
+  });
+}
+
 function topicAssignmentLabel(plan) {
   if (plan.assignedByRole === "head") return `Head Assigned by ${professorName(plan.assignedByProfessorId)}`;
   if (plan.assignedByRole === "professor") return "Professor Assigned";
@@ -3606,6 +3891,14 @@ function sourceBadge(item) {
   return "";
 }
 
+function changedFromText(slot) {
+  const oldSlot = slot?.changedFrom;
+  if (!oldSlot) return "";
+  const oldBatch = batchById(oldSlot.batchId);
+  const oldPaper = oldSlot.noLecture ? "No Lecture" : paperShort(oldBatch?.level, oldSlot.subject || slotSubject(oldSlot));
+  return `${fullDateLabel(oldSlot.date)} ${formatTimeRange(oldSlot.start, oldSlot.end)} | ${professorName(oldSlot.professorId) || "-"} | ${oldPaper}`;
+}
+
 function statusBadge(label, tone = "green") {
   return `<span class="status ${tone}">${escapeHtml(label)}</span>`;
 }
@@ -3893,7 +4186,9 @@ function renderProfessorTimetableReport() {
     .sort((a, b) => `${a.date} ${a.start} ${batchById(a.batchId)?.name || ""}`.localeCompare(`${b.date} ${b.start} ${batchById(b.batchId)?.name || ""}`));
   $("#professorPlanTimetable").innerHTML = rows.map((slot) => {
     const batch = batchById(slot.batchId);
-    return `<tr class="${isDummy(slot) ? "dummy-row" : ""}">
+    const oldText = changedFromText(slot);
+    const typeCell = `${sourceBadge(slot) || dummyBadge(slot)}${oldText ? `<br><small>Old: ${escapeHtml(oldText)}</small>` : ""}`;
+    return `<tr class="${isDummy(slot) ? "dummy-row" : ""} ${isChangedTT(slot) ? "changed-tt-row" : ""}">
       <td>${escapeHtml(fullDateLabel(slot.date))}</td>
       <td>${escapeHtml(formatTimeRange(slot.start, slot.end))}</td>
       <td><strong>${escapeHtml(batch?.name || "")}</strong></td>
@@ -3902,7 +4197,7 @@ function renderProfessorTimetableReport() {
       <td>${escapeHtml(batch?.attempt || "")}</td>
       <td>${escapeHtml(paperShort(batch?.level, slotSubject(slot)))}</td>
       <td>${hoursBetween(slot.start, slot.end).toFixed(1)}</td>
-      <td>${dummyBadge(slot)}</td>
+      <td>${typeCell}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="9" class="empty">No timetable hours found for this professor and paper.</td></tr>`;
 }
@@ -4153,6 +4448,7 @@ function renderProfessorLogin() {
   }).join("") || `<tr><td colspan="10" class="empty">No actual lecture submitted by this professor yet.</td></tr>`;
   renderProfessorNotifications(professorId);
   renderProfessorSelfTopicForm(professorId);
+  renderProfessorHeadSyllabusPanel();
 }
 
 function renderWeeklyInsights(dates, visibleBatches, activeTimeSlots) {
@@ -4969,11 +5265,20 @@ function upsertChangesTTSlot(entry) {
   if (existing) {
     const oldSlot = { ...existing };
     Object.assign(existing, next);
+    existing.changedFrom = {
+      batchId: oldSlot.batchId,
+      date: oldSlot.date,
+      start: oldSlot.start,
+      end: oldSlot.end,
+      professorId: oldSlot.professorId || "",
+      subject: oldSlot.subject || "",
+      noLecture: Boolean(oldSlot.noLecture)
+    };
     if (oldSlot.professorId) notifyProfessorChange(oldSlot.professorId, existing, oldSlot, "Lecture changed");
     if (existing.professorId && existing.professorId !== oldSlot.professorId) notifyProfessorChange(existing.professorId, existing, oldSlot, "New changed lecture assigned");
   }
   else {
-    const created = { id: uid("chg"), ...next };
+    const created = { id: uid("chg"), ...next, changedFrom: null };
     data.slots.push(created);
     if (created.professorId) notifyProfessorChange(created.professorId, created, null, "New changed lecture assigned");
   }
@@ -6012,8 +6317,8 @@ function saveProfessorManagement(professorId) {
   const loginInput = $(`[data-professor-login-id="${CSS.escape(professorId)}"]`);
   const passwordInput = $(`[data-professor-password="${CSS.escape(professorId)}"]`);
   const selectedLevels = selectedValues(levelSelect);
-  const selectedPaperNos = selectedValues(paperNoSelect).map((paperNo) => Number(paperNo.replace("P", "")));
-  const selectedHeadPaperNos = Array.from(headPaperBox?.querySelectorAll("input:checked") || []).map((input) => Number(input.value.replace("P", "")));
+  const selectedPaperNos = selectedValues(paperNoSelect).map(normalizePaperNo).filter(Boolean);
+  const selectedHeadPaperNos = Array.from(headPaperBox?.querySelectorAll("input:checked") || []).map((input) => normalizePaperNo(input.value)).filter(Boolean);
   professor.name = nameInput.value.trim() || professor.name;
   professor.loginId = loginInput.value.trim() || professorLoginId(professor);
   professor.loginPassword = passwordInput.value.trim() || professorPassword(professor);
@@ -6028,10 +6333,11 @@ function saveProfessorManagement(professorId) {
     programPapers = allPapers().filter((paper) => programLevels.some((level) => papersForLevel(level).includes(paper)));
   }
   professor.papers = [...otherProgramPapers, ...programPapers];
-  const otherHeadPaperNos = (professor.headPaperNos || []).filter((paperNo) =>
-    !activeProgramPaperNoOptions().includes(`P${Number(paperNo)}`)
+  const otherHeadPaperNos = (professor.headPaperNos || []).map(normalizePaperNo).filter((paperNo) =>
+    paperNo && !activeProgramPaperNoOptions().includes(`P${paperNo}`)
   );
   professor.headPaperNos = activeProgram() === "CMA USA" ? otherHeadPaperNos : [...otherHeadPaperNos, ...selectedHeadPaperNos];
+  rememberProfessorMasterBackup(professor);
   saveData();
 }
 
@@ -6041,13 +6347,13 @@ function addProfessorFromManagement(event) {
   const name = form.elements.name.value.trim();
   if (!name) return;
   const selectedLevels = selectedValues(form.elements.levels);
-  const selectedPaperNos = selectedValues(form.elements.paperNos).map((paperNo) => Number(paperNo.replace("P", "")));
+  const selectedPaperNos = selectedValues(form.elements.paperNos).map(normalizePaperNo).filter(Boolean);
   const levels = selectedLevels.length ? selectedLevels : levelsForProgram();
   let papers = papersFromLevelsAndNos(levels, selectedPaperNos);
   if (!papers.length) {
     papers = allPapers().filter((paper) => levels.some((level) => papersForLevel(level).includes(paper)));
   }
-  data.professors.push({
+  const professor = {
     id: slug(name) || uid("p"),
     name,
     speciality: selectedPaperNos.length ? `Papers ${selectedPaperNos.join(", ")}` : "New professor",
@@ -6058,7 +6364,9 @@ function addProfessorFromManagement(event) {
     loginId: professorFirstNameCredential(name),
     loginPassword: professorFirstNameCredential(name),
     color: professorPalette[data.professors.length % professorPalette.length]
-  });
+  };
+  data.professors.push(professor);
+  rememberProfessorMasterBackup(professor);
   form.reset();
   saveData();
 }
@@ -6068,6 +6376,7 @@ function deleteProfessor(professorId) {
   if (!professor) return;
   if (!confirm(`Delete ${professor.name} from Professor Management? Existing timetable cells for this professor will become Open.`)) return;
   data.professors = data.professors.filter((item) => item.id !== professorId);
+  if (data.settings.professorMasterBackup) delete data.settings.professorMasterBackup[professorId];
   data.slots.forEach((slot) => {
     if (slot.professorId === professorId) {
       slot.professorId = "";
@@ -6093,13 +6402,30 @@ function updateFilterVisibility(viewName = document.querySelector(".tab.active")
   });
 }
 
+function handleSyllabusCompletionToggle(event) {
+  const button = event.target.closest("[data-syllabus-batch][data-syllabus-topic]");
+  if (!button) return;
+  const topic = topicById(button.dataset.syllabusTopic);
+  if (isProfessorMode() && !loggedInProfessorHeadPaperNos().includes(Number(topic?.paperNo))) {
+    alert("Only the Subject Head for this paper can update syllabus completion.");
+    return;
+  }
+  const done = !isSyllabusTopicDone(button.dataset.syllabusBatch, button.dataset.syllabusTopic);
+  setSyllabusTopicDone(button.dataset.syllabusBatch, button.dataset.syllabusTopic, done);
+  saveData({ skipRender: true, skipCloudSave: isProfessorMode() });
+  renderSyllabusTracker();
+  renderProfessorHeadSyllabusPanel();
+  renderDashboard();
+  if (isProfessorMode() && cloudSyncUrl()) saveCloudData({ silent: true });
+}
+
 function bindEvents() {
   document.addEventListener("click", (event) => {
     const button = event.target.closest("button, .file-trigger");
     if (!button || button.disabled) return;
     animateButton(button, "button-pressed", 180);
   });
-  document.addEventListener("fullscreenchange", updateWeeklyFullscreenButton);
+  document.addEventListener("fullscreenchange", updateFullscreenButtons);
 
   $$("[data-program]").forEach((button) => {
     button.addEventListener("click", () => setActiveProgram(button.dataset.program));
@@ -6123,7 +6449,12 @@ function bindEvents() {
     renderSharePanels();
     renderProfessorPlanning();
     renderProfessorLogin();
+    renderSyllabusTracker();
   }));
+  $("#syllabusFilter")?.addEventListener("change", renderSyllabusTracker);
+  $("#professorHeadSyllabusFilter")?.addEventListener("change", renderProfessorHeadSyllabusPanel);
+  $("#syllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
+  $("#professorHeadSyllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
   $("#alertTypeFilter").addEventListener("change", () => renderAlerts([]));
   if ($("#slotForm")) $("#slotForm").addEventListener("submit", addSlot);
   $("#dailyDateFilter").addEventListener("change", renderDailyTimetable);
@@ -6270,7 +6601,16 @@ function bindEvents() {
   $("#weeklyFullscreenBtn")?.addEventListener("click", () => {
     const panel = $("#weeklyView .panel");
     if (!panel) return;
-    if (document.fullscreenElement) {
+    if (document.fullscreenElement === panel) {
+      document.exitFullscreen?.();
+    } else {
+      panel.requestFullscreen?.();
+    }
+  });
+  $("#syllabusFullscreenBtn")?.addEventListener("click", () => {
+    const panel = $("#syllabusView .panel");
+    if (!panel) return;
+    if (document.fullscreenElement === panel) {
       document.exitFullscreen?.();
     } else {
       panel.requestFullscreen?.();
@@ -6458,7 +6798,7 @@ function bindEvents() {
     saveData();
   });
 
-  $("#exportBtn").addEventListener("click", () => {
+  $("#exportBtn")?.addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -6468,7 +6808,7 @@ function bindEvents() {
     URL.revokeObjectURL(url);
   });
 
-  $("#importFile").addEventListener("change", async (event) => {
+  $("#importFile")?.addEventListener("change", async (event) => {
     const file = event.target.files[0];
     if (!file) return;
     data = JSON.parse(await file.text());
@@ -6497,6 +6837,7 @@ function render() {
   safeRenderStep("Share panels", renderSharePanels);
   safeRenderStep("Professor planning", renderProfessorPlanning);
   safeRenderStep("Professor login", renderProfessorLogin);
+  safeRenderStep("Syllabus tracker", renderSyllabusTracker);
   safeRenderStep("Access mode", applyAccessMode);
 }
 
