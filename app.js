@@ -1624,6 +1624,142 @@ function setActiveView(viewName) {
   $$(".view").forEach((view) => view.classList.remove("active"));
   $(`#${viewName}View`)?.classList.add("active");
   updateFilterVisibility(viewName);
+  renderQuickJump(viewName);
+}
+
+function navigationGroups() {
+  const groups = [
+    {
+      view: "dashboard",
+      title: "Dashboard",
+      items: [
+        { label: "KPI Summary", target: "#kpiGrid" },
+        { label: "Batchwise Details", target: "#batchTable" },
+        { label: "Alerts", target: "#alerts" }
+      ]
+    },
+    {
+      view: "weekly",
+      title: "Weekly Table",
+      items: [
+        { label: "Weekly Timetable", target: "#weeklyView .panel" },
+        { label: "Google Import", target: "#importGoogleSheetBtn" },
+        { label: "Full Screen", target: "#weeklyFullscreenBtn" }
+      ]
+    },
+    {
+      view: "changesTT",
+      title: "Changes TT",
+      items: [
+        { label: "Change Entry", target: "#changesTTInput" },
+        { label: "Preview", target: "#changesTTPreview" },
+        { label: "Apply Changes", target: "#applyChangesTTBtn" }
+      ]
+    },
+    {
+      view: "planner",
+      title: "Timetable",
+      items: [
+        { label: "Batch-wise Share", target: "#batchTimetablePreview" },
+        { label: "Professor-wise Share", target: "#professorTimetablePreview" },
+        { label: "Location-wise Share", target: "#locationTimetablePreview" },
+        { label: "Daily Timetable", target: "#dailyTimetableTable" }
+      ]
+    },
+    {
+      view: "professorPlanning",
+      title: "Professor Planning",
+      items: [
+        { label: "Faculty Monthly Hours", target: "#professorMonthlySummaryTable" },
+        { label: "Syllabus Allocation", target: "#topicPlanForm" },
+        { label: "Professor Timetable", target: "#professorPlanTimetable" },
+        { label: "Actual Batch Hours", target: "#professorBatchHoursReport" },
+        { label: "Batch Allocation Master", target: "#batchAllocationMasterReport" }
+      ]
+    },
+    {
+      view: "professorLogin",
+      title: "Professor Login",
+      items: [
+        { label: "Actual Lecture Entry", target: "#professorActualForm" },
+        { label: "My Weekly Timetable", target: "#professorNotifications" },
+        { label: "Topic Selection", target: "#professorSelfTopicForm" },
+        { label: "Head Syllabus", target: "#professorHeadSyllabusPanel" },
+        { label: "Actual Records", target: "#professorActualTable" }
+      ]
+    },
+    {
+      view: "syllabus",
+      title: "Syllabus",
+      items: [
+        { label: "Syllabus Grid", target: "#syllabusView .panel" },
+        { label: "Level / Attempt Filter", target: "#syllabusFilter" },
+        { label: "Full Screen", target: "#syllabusFullscreenBtn" }
+      ]
+    },
+    {
+      view: "masters",
+      title: "Masters",
+      items: [
+        { label: "Create Batch", target: "#batchForm" },
+        { label: "Master Data", target: "#masterForm" },
+        { label: "All Batches", target: "#masterBatchTable" },
+        { label: "Professor Management", target: "#professorManagementTable" }
+      ]
+    }
+  ];
+  if (!isProfessorMode()) return groups;
+  const allowed = new Set(["professorLogin"]);
+  if (professorCanUseSyllabusTracker()) allowed.add("syllabus");
+  return groups.filter((group) => allowed.has(group.view));
+}
+
+function navigationGroupFor(viewName) {
+  return navigationGroups().find((group) => group.view === viewName);
+}
+
+function scrollToNavigationTarget(selector) {
+  const element = document.querySelector(selector);
+  if (!element) return;
+  const target = element.closest(".panel") || element;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function goToNavigation(viewName, target = "") {
+  setActiveView(viewName);
+  setTimeout(() => {
+    if (target) scrollToNavigationTarget(target);
+    else window.scrollTo({ top: 0, behavior: "smooth" });
+  }, 40);
+}
+
+function renderQuickJump(viewName = document.querySelector(".tab.active")?.dataset.view || "dashboard") {
+  const panel = $("#quickJump");
+  if (!panel) return;
+  const group = navigationGroupFor(viewName);
+  if (!group || viewName === "goTo") {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+  panel.classList.remove("hidden");
+  panel.innerHTML = [
+    `<button class="tiny ghost" type="button" data-jump-view="goTo">Go To All</button>`,
+    ...group.items.map((item) => `<button class="tiny ghost" type="button" data-jump-view="${escapeHtml(group.view)}" data-jump-target="${escapeHtml(item.target)}">${escapeHtml(item.label)}</button>`)
+  ].join("");
+}
+
+function renderGoToGrid() {
+  const grid = $("#goToGrid");
+  if (!grid) return;
+  grid.innerHTML = navigationGroups().map((group) => `
+    <article class="go-to-card">
+      <h3>${escapeHtml(group.title)}</h3>
+      <div>
+        ${group.items.map((item) => `<button class="ghost" type="button" data-jump-view="${escapeHtml(group.view)}" data-jump-target="${escapeHtml(item.target)}">${escapeHtml(item.label)}</button>`).join("")}
+      </div>
+    </article>
+  `).join("");
 }
 
 function renderProgramSwitch() {
@@ -1684,11 +1820,11 @@ function applyAccessMode() {
   document.body.classList.toggle("professor-mode", professorMode);
   document.body.classList.toggle("subject-head-mode", subjectHeadMode);
   $$(".tab").forEach((tab) => {
-    const allowedForProfessor = tab.dataset.view === "professorLogin" || (subjectHeadMode && tab.dataset.view === "syllabus");
+    const allowedForProfessor = ["goTo", "professorLogin"].includes(tab.dataset.view) || (subjectHeadMode && tab.dataset.view === "syllabus");
     tab.classList.toggle("hidden", professorMode && !allowedForProfessor);
   });
   const activeView = document.querySelector(".tab.active")?.dataset.view || "professorLogin";
-  if (professorMode && activeView !== "professorLogin" && !(subjectHeadMode && activeView === "syllabus")) setActiveView("professorLogin");
+  if (professorMode && !["goTo", "professorLogin"].includes(activeView) && !(subjectHeadMode && activeView === "syllabus")) setActiveView("professorLogin");
   const label = $("#professorLoginSelect")?.closest("label");
   if (label) label.classList.toggle("hidden", professorMode);
   const professorHeading = $("#professorLoginView .panel-head h2");
@@ -6434,12 +6570,13 @@ function bindEvents() {
 
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
-      $$(".tab").forEach((item) => item.classList.remove("active"));
-      $$(".view").forEach((view) => view.classList.remove("active"));
-      tab.classList.add("active");
-      $(`#${tab.dataset.view}View`).classList.add("active");
-      updateFilterVisibility(tab.dataset.view);
+      setActiveView(tab.dataset.view);
     });
+  });
+  document.addEventListener("click", (event) => {
+    const jump = event.target.closest("[data-jump-view]");
+    if (!jump) return;
+    goToNavigation(jump.dataset.jumpView, jump.dataset.jumpTarget || "");
   });
 
   ["centreFilter", "attemptFilter", "levelFilter", "timeSlotFilter", "dayFilter", "professorFilter"].forEach((id) => $(`#${id}`).addEventListener("change", () => {
@@ -6829,6 +6966,8 @@ function render() {
   safeRenderStep("Program switch", renderProgramSwitch);
   safeRenderStep("Cloud status", () => updateCloudStatus());
   safeRenderStep("Filter visibility", updateFilterVisibility);
+  safeRenderStep("Go To navigation", renderGoToGrid);
+  safeRenderStep("Quick jump", renderQuickJump);
   safeRenderStep("Filters", renderFilters);
   safeRenderStep("Forms", renderForms);
   safeRenderStep("Dashboard", renderDashboard);

@@ -415,13 +415,8 @@ input[type="file"] {
   display: none !important;
 }
 
-.professor-mode .tabs,
 .professor-mode .filters {
   display: none !important;
-}
-
-.professor-mode.subject-head-mode .tabs {
-  display: flex !important;
 }
 
 .professor-mode.subject-head-mode .filters {
@@ -596,6 +591,59 @@ main {
 
 .filters.hidden {
   display: none;
+}
+
+.quick-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: -6px 0 16px;
+  padding: 8px 10px;
+  border: 1px solid #c8d8e3;
+  border-radius: 8px;
+  background: #eef6f8;
+  box-shadow: var(--shadow);
+}
+
+.quick-jump.hidden {
+  display: none;
+}
+
+.quick-jump button {
+  min-height: 30px;
+}
+
+.go-to-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.go-to-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.go-to-card h3 {
+  margin: 0;
+  color: var(--brand-dark);
+  font-size: 16px;
+}
+
+.go-to-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.go-to-card button {
+  min-height: 32px;
 }
 
 label {

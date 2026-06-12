@@ -74,6 +74,7 @@
 
     <main>
       <nav class="tabs" aria-label="Views">
+        <button class="tab" data-view="goTo">Go To</button>
         <button class="tab active" data-view="dashboard">Dashboard</button>
         <button class="tab" data-view="weekly">Weekly Table</button>
         <button class="tab" data-view="changesTT">Changes TT</button>
@@ -109,6 +110,20 @@
           Professor
           <select id="professorFilter"></select>
         </label>
+      </section>
+
+      <section class="quick-jump" id="quickJump" aria-label="Quick section navigation"></section>
+
+      <section class="view" id="goToView">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Go To</h2>
+              <span>Open any part of the software directly.</span>
+            </div>
+          </div>
+          <div class="go-to-grid" id="goToGrid"></div>
+        </section>
       </section>
 
       <section class="view active" id="dashboardView">
