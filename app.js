@@ -1,4 +1,4 @@
-const storeKey = "cma-mumbai-planner-v1";
+﻿const storeKey = "cma-mumbai-planner-v1";
 const userThemeKey = "cma-planner-user-theme";
 const dummyReportTag = "dummy-report-data";
 const changedTTSource = "changed-tt";
@@ -1047,6 +1047,7 @@ function defaultPaperMasterRows() {
         group,
         paper,
         paperNo: Number(basePaperNumbers[paper] || 0),
+        paperCode: basePaperNumbers[paper] ? `P${basePaperNumbers[paper]}` : "",
         shortName: basePaperShortNames[paper] || "",
         active: true
       }))
@@ -1066,7 +1067,8 @@ function ensurePaperMasterShape() {
     level: row.level || (activeProgram() === "CMA USA" ? "CMA USA Part 1" : "Foundation"),
     group: row.group || Object.keys(baseCmaPapers[row.level] || {})[0] || "Foundation",
     paper: cleanSheetText(row.paper || row.basePaper || "New Paper"),
-    paperNo: normalizePaperNo(row.paperNo),
+    paperNo: normalizePaperNo(row.paperNo || row.paperCode),
+    paperCode: cleanSheetText(row.paperCode || (row.paperNo ? `P${normalizePaperNo(row.paperNo)}` : "")),
     shortName: cleanSheetText(row.shortName || ""),
     active: row.active !== false
   }));
@@ -1097,7 +1099,7 @@ function applyPaperMaster() {
       delete paperNumbers[row.basePaper];
       delete paperShortNames[row.basePaper];
     }
-    paperNumbers[row.paper] = Number(row.paperNo || paperNumbers[row.paper] || 0);
+    paperNumbers[row.paper] = normalizePaperNo(row.paperNo || row.paperCode || paperNumbers[row.paper]);
     if (row.shortName) paperShortNames[row.paper] = row.shortName;
   });
 }
@@ -1479,6 +1481,18 @@ function normalizePaperNo(value) {
   return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
+function customPaperCodeForNumber(number) {
+  const numeric = normalizePaperNo(number);
+  if (!numeric || !Array.isArray(data?.settings?.paperMaster)) return "";
+  const row = data.settings.paperMaster.find((item) =>
+    item.active !== false &&
+    levelsForProgram().includes(item.level) &&
+    normalizePaperNo(item.paperNo || item.paperCode) === numeric &&
+    cleanSheetText(item.paperCode || "")
+  );
+  return row ? cleanSheetText(row.paperCode) : "";
+}
+
 function activeProgram() {
   return programs[data.settings?.activeProgram] ? data.settings.activeProgram : "CMA India";
 }
@@ -1557,6 +1571,8 @@ function normalizeBatchProgram(batch) {
 
 function paperCodeLabel(value) {
   const number = Number(String(value).replace("P", ""));
+  const customCode = customPaperCodeForNumber(number);
+  if (customCode) return customCode;
   if (number >= 101 && number <= 106) return `Part 1 Sec ${String.fromCharCode(64 + (number - 100))}`;
   if (number >= 201 && number <= 206) return `Part 2 Sec ${String.fromCharCode(64 + (number - 200))}`;
   return `P${number}`;
@@ -3016,7 +3032,7 @@ function renderPaperManagement() {
   form.innerHTML = [
     selectField("level", "Level", levelsForProgram().map((level) => ({ value: level, label: level })), defaultLevel),
     field("group", "Group", "text", defaultGroup, "required"),
-    field("paperNo", "Paper No", "number", "", "min=\"1\" required"),
+    field("paperCode", "Paper Code", "text", "", "placeholder=\"e.g. Paper 1A or P9B\" required"),
     field("paper", "Paper Name", "text", "", "required"),
     field("shortName", "Short Name", "text", "", "placeholder=\"e.g. Laws\""),
     `<div class="row-actions wide"><button type="submit">Add Paper</button></div>`
@@ -3024,12 +3040,12 @@ function renderPaperManagement() {
 
   const rows = (data.settings.paperMaster || [])
     .filter((row) => levelsForProgram().includes(row.level))
-    .sort((a, b) => levelOrder(a.level) - levelOrder(b.level) || Number(a.paperNo) - Number(b.paperNo) || a.paper.localeCompare(b.paper));
+    .sort((a, b) => levelOrder(a.level) - levelOrder(b.level) || normalizePaperNo(a.paperNo || a.paperCode) - normalizePaperNo(b.paperNo || b.paperCode) || a.paper.localeCompare(b.paper));
   table.innerHTML = rows.map((row) => `
     <tr class="${row.active ? "" : "dummy-row"}">
       <td><select data-paper-master="${escapeHtml(row.id)}" data-field="level">${levelsForProgram().map((level) => `<option value="${escapeHtml(level)}" ${row.level === level ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}</select></td>
       <td><input data-paper-master="${escapeHtml(row.id)}" data-field="group" value="${escapeHtml(row.group)}"></td>
-      <td><input data-paper-master="${escapeHtml(row.id)}" data-field="paperNo" type="number" min="1" value="${escapeHtml(row.paperNo)}"></td>
+      <td><input data-paper-master="${escapeHtml(row.id)}" data-field="paperCode" value="${escapeHtml(row.paperCode || `P${row.paperNo}`)}"></td>
       <td><input data-paper-master="${escapeHtml(row.id)}" data-field="paper" value="${escapeHtml(row.paper)}"></td>
       <td><input data-paper-master="${escapeHtml(row.id)}" data-field="shortName" value="${escapeHtml(row.shortName || "")}"></td>
       <td><button class="tiny ghost" data-save-paper-master="${escapeHtml(row.id)}" type="button">Save</button></td>
@@ -3501,14 +3517,41 @@ function syllabusCompletionKey(batchId, topicId) {
   return `${batchId}__${topicId}`;
 }
 
-function isSyllabusTopicDone(batchId, topicId) {
-  return Boolean(data.syllabusCompletion?.[syllabusCompletionKey(batchId, topicId)]);
+function syllabusCompletionRecord(batchId, topicId) {
+  const value = data.syllabusCompletion?.[syllabusCompletionKey(batchId, topicId)];
+  if (!value) return { done: false, professorId: "" };
+  if (value === true) return { done: true, professorId: "" };
+  if (typeof value === "object") {
+    return {
+      done: value.done !== false,
+      professorId: value.professorId || ""
+    };
+  }
+  return { done: Boolean(value), professorId: "" };
 }
 
-function setSyllabusTopicDone(batchId, topicId, done) {
+function isSyllabusTopicDone(batchId, topicId) {
+  return syllabusCompletionRecord(batchId, topicId).done;
+}
+
+function setSyllabusTopicDone(batchId, topicId, done, professorId = "") {
   const key = syllabusCompletionKey(batchId, topicId);
-  if (done) data.syllabusCompletion[key] = true;
+  const existing = syllabusCompletionRecord(batchId, topicId);
+  if (done) data.syllabusCompletion[key] = {
+    done: true,
+    professorId: professorId || existing.professorId || ""
+  };
   else delete data.syllabusCompletion[key];
+}
+
+function setSyllabusTopicProfessor(batchId, topicId, professorId) {
+  const key = syllabusCompletionKey(batchId, topicId);
+  const existing = syllabusCompletionRecord(batchId, topicId);
+  if (!existing.done) return;
+  data.syllabusCompletion[key] = {
+    done: true,
+    professorId: professorId || ""
+  };
 }
 
 function syllabusFilterValue(batch) {
@@ -3537,6 +3580,28 @@ function syllabusVisibleBatches() {
 
 function syllabusTopicHours(topic) {
   return Number(topic?.standardHours || 0);
+}
+
+function renderSyllabusBatchCell(batch, topic) {
+  if (!topicAppliesToBatch(topic, batch)) return `<td class="syllabus-batch-cell syllabus-na">-</td>`;
+  const completion = syllabusCompletionRecord(batch.id, topic.id);
+  const done = completion.done;
+  const eligibleProfessors = eligibleProfessorsForBatchPaper(batch.id, topic.paperNo);
+  if (completion.professorId && !eligibleProfessors.some((professor) => professor.id === completion.professorId)) {
+    const savedProfessor = data.professors.find((professor) => professor.id === completion.professorId);
+    if (savedProfessor) eligibleProfessors.push(savedProfessor);
+  }
+  return `
+    <td class="syllabus-batch-cell">
+      <div class="syllabus-cell-control">
+        <button class="syllabus-toggle ${done ? "done" : "pending"}" type="button" data-syllabus-batch="${escapeHtml(batch.id)}" data-syllabus-topic="${escapeHtml(topic.id)}" aria-label="${done ? "Completed" : "Pending"} ${escapeHtml(topic.chapterName)} for ${escapeHtml(batch.name)}">${done ? "Done" : "Pending"}</button>
+        <select class="syllabus-professor-select" data-syllabus-professor-batch="${escapeHtml(batch.id)}" data-syllabus-professor-topic="${escapeHtml(topic.id)}" ${done ? "" : "disabled"}>
+          <option value="">Taught by</option>
+          ${eligibleProfessors.map((professor) => `<option value="${escapeHtml(professor.id)}" ${completion.professorId === professor.id ? "selected" : ""}>${escapeHtml(professor.name)}</option>`).join("")}
+        </select>
+      </div>
+    </td>
+  `;
 }
 
 function renderSyllabusTracker(options = {}) {
@@ -3638,15 +3703,7 @@ function renderSyllabusTracker(options = {}) {
       ? `<tr class="syllabus-paper-row"><th colspan="${3 + batches.length}">${escapeHtml(paperTitle)}</th></tr>`
       : "";
     lastPaperNo = paperNo;
-    const cells = batches.map((batch) => {
-      if (!topicAppliesToBatch(topic, batch)) return `<td class="syllabus-batch-cell syllabus-na">-</td>`;
-      const done = isSyllabusTopicDone(batch.id, topic.id);
-      return `
-        <td class="syllabus-batch-cell">
-          <button class="syllabus-toggle ${done ? "done" : "pending"}" type="button" data-syllabus-batch="${escapeHtml(batch.id)}" data-syllabus-topic="${escapeHtml(topic.id)}" aria-label="${done ? "Completed" : "Pending"} ${escapeHtml(topic.chapterName)} for ${escapeHtml(batch.name)}">${done ? "✓" : "×"}</button>
-        </td>
-      `;
-    }).join("");
+    const cells = batches.map((batch) => renderSyllabusBatchCell(batch, topic)).join("");
     return `
       ${paperRow}
       <tr>
@@ -4951,7 +5008,7 @@ function renderWeeklyTable() {
     const visibleTimeSlots = boardTimeSlotsForDate(date, activeTimeSlots);
     return visibleTimeSlots.map((timeSlot, slotIndex) => {
       const dateCell = `<td class="weekly-date-col">
-        <button class="date-delete-x" data-delete-time-slot-date="${escapeHtml(date)}" data-delete-time-slot-start="${escapeHtml(timeSlot.start)}" data-delete-time-slot-end="${escapeHtml(timeSlot.end)}" type="button" title="Delete this time slot">×</button>
+        <button class="date-delete-x" data-delete-time-slot-date="${escapeHtml(date)}" data-delete-time-slot-start="${escapeHtml(timeSlot.start)}" data-delete-time-slot-end="${escapeHtml(timeSlot.end)}" type="button" title="Delete this time slot">Ã—</button>
         <strong>${escapeHtml(dayLabel(date))}</strong>
       </td>`;
       const cells = visibleBatches.map((batch) => {
@@ -6521,16 +6578,16 @@ function savePaperMasterRow(id) {
   const oldPaper = row.paper;
   $$(`[data-paper-master="${CSS.escape(id)}"]`).forEach((input) => {
     const fieldName = input.dataset.field;
-    if (fieldName === "paperNo") row.paperNo = normalizePaperNo(input.value);
+    if (fieldName === "paperCode") row.paperCode = cleanSheetText(input.value);
     else row[fieldName] = cleanSheetText(input.value);
   });
   row.level = row.level || levelsForProgram()[0];
   row.group = row.group || paperGroupOptions(row.level)[0] || row.level;
-  row.paperNo = normalizePaperNo(row.paperNo);
+  row.paperNo = normalizePaperNo(row.paperCode || row.paperNo);
   row.paper = row.paper || oldPaper;
   row.shortName = cleanSheetText(row.shortName || "");
-  if (!row.paperNo || !row.paper) {
-    alert("Paper No and Paper Name are required.");
+  if (!row.paperCode || !row.paperNo || !row.paper) {
+    alert("Paper Code must contain a number, and Paper Name is required.");
     renderPaperManagement();
     return;
   }
@@ -6545,10 +6602,11 @@ function addPaperMaster(event) {
   const form = event.currentTarget;
   const level = form.elements.level.value;
   const group = cleanSheetText(form.elements.group.value || paperGroupOptions(level)[0] || level);
-  const paperNo = normalizePaperNo(form.elements.paperNo.value);
+  const paperCode = cleanSheetText(form.elements.paperCode.value);
+  const paperNo = normalizePaperNo(paperCode);
   const paper = cleanSheetText(form.elements.paper.value);
-  if (!level || !group || !paperNo || !paper) {
-    alert("Please enter Level, Group, Paper No and Paper Name.");
+  if (!level || !group || !paperCode || !paperNo || !paper) {
+    alert("Please enter Level, Group, Paper Code with a number, and Paper Name.");
     return;
   }
   data.settings.paperMaster.push({
@@ -6557,6 +6615,7 @@ function addPaperMaster(event) {
     level,
     group,
     paperNo,
+    paperCode,
     paper,
     shortName: cleanSheetText(form.elements.shortName.value || ""),
     active: true
@@ -6797,7 +6856,28 @@ function handleSyllabusCompletionToggle(event) {
     return;
   }
   const done = !isSyllabusTopicDone(button.dataset.syllabusBatch, button.dataset.syllabusTopic);
-  setSyllabusTopicDone(button.dataset.syllabusBatch, button.dataset.syllabusTopic, done);
+  const professorSelect = button.closest(".syllabus-cell-control")?.querySelector(".syllabus-professor-select");
+  const professorId = done && isProfessorMode()
+    ? loggedInProfessorId()
+    : professorSelect?.value || "";
+  setSyllabusTopicDone(button.dataset.syllabusBatch, button.dataset.syllabusTopic, done, professorId);
+  saveData({ skipRender: true, skipCloudSave: isProfessorMode() });
+  renderSyllabusTracker();
+  renderProfessorHeadSyllabusPanel();
+  renderDashboard();
+  if (isProfessorMode() && cloudSyncUrl()) saveCloudData({ silent: true });
+}
+
+function handleSyllabusProfessorChange(event) {
+  const select = event.target.closest("[data-syllabus-professor-batch][data-syllabus-professor-topic]");
+  if (!select) return;
+  const topic = topicById(select.dataset.syllabusProfessorTopic);
+  if (isProfessorMode() && !loggedInProfessorHeadPaperNos().includes(Number(topic?.paperNo))) {
+    alert("Only the Subject Head for this paper can update syllabus completion.");
+    renderProfessorHeadSyllabusPanel();
+    return;
+  }
+  setSyllabusTopicProfessor(select.dataset.syllabusProfessorBatch, select.dataset.syllabusProfessorTopic, select.value);
   saveData({ skipRender: true, skipCloudSave: isProfessorMode() });
   renderSyllabusTracker();
   renderProfessorHeadSyllabusPanel();
@@ -6842,6 +6922,8 @@ function bindEvents() {
   $("#professorHeadSyllabusFilter")?.addEventListener("change", renderProfessorHeadSyllabusPanel);
   $("#syllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
   $("#professorHeadSyllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
+  $("#syllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
+  $("#professorHeadSyllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
   $("#alertTypeFilter").addEventListener("change", () => renderAlerts([]));
   if ($("#slotForm")) $("#slotForm").addEventListener("submit", addSlot);
   $("#dailyDateFilter").addEventListener("change", renderDailyTimetable);
