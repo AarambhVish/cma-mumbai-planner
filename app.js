@@ -175,7 +175,7 @@ const basePaperShortNames = { ...paperShortNames };
 
 const realProfessors = [
   { id: "radhika-miss", name: "Radhika Miss", speciality: "Law and Strategic Management", home: "Online", levels: ["Foundation", "Inter"], papers: ["Fundamentals of Business Laws", "Business Laws and Ethics", "Strategic Management"] },
-  { id: "rahul-b-sir", name: "Rahul B. Sir", speciality: "Communication and Strategic Management", home: "Online", levels: ["Foundation", "Inter"], papers: ["Business Communication", "Strategic Management"] },
+  { id: "rahul-b-sir", name: "Rahul B. Sir", speciality: "Business Laws, Communication and Strategic Management", home: "Online", levels: ["Foundation", "Inter"], papers: ["Fundamentals of Business Laws", "Business Laws and Ethics", "Business Communication", "Strategic Management"] },
   { id: "nitin-sir", name: "Nitin Sir", speciality: "Accounting", home: "Online", levels: ["Foundation", "Inter", "Final"], papers: ["Fundamentals of Financial Accounting", "Financial Accounting", "Management Accounting", "Cost and Management Audit"] },
   { id: "sumit-sir", name: "Sumit Sir", speciality: "Maths, Operations, Valuation", home: "Online", levels: ["Foundation", "Inter", "Final"], papers: ["Fundamentals of Business Maths & Stats", "Operations Management", "Strategic Performance Mgmt & Business Valuation"] },
   { id: "ravi-patel-sir", name: "Ravi Patel Sir", speciality: "Maths and Stats", home: "Online", levels: ["Foundation"], papers: ["Fundamentals of Business Maths & Stats"] },
@@ -1214,6 +1214,16 @@ function ensureDataShape() {
   }));
   data.professors.forEach(cleanProfessorProgramMapping);
   restoreProfessorMasterBackups();
+  if (!data.settings.rahulLawPapersApplied) {
+    const rahul = data.professors.find((professor) => professor.id === "rahul-b-sir" || professor.name === "Rahul B. Sir");
+    if (rahul) {
+      rahul.speciality = rahul.speciality || "Business Laws, Communication and Strategic Management";
+      rahul.levels = [...new Set([...(rahul.levels || []), "Foundation", "Inter"])];
+      rahul.papers = [...new Set([...(rahul.papers || []), "Fundamentals of Business Laws", "Business Laws and Ethics"])];
+      rememberProfessorMasterBackup(rahul);
+    }
+    data.settings.rahulLawPapersApplied = true;
+  }
   restoreBatchMasterBackups();
   data.batches = data.batches.map((batch, index) => {
     const normalized = normalizeBatchProgram({ ...batch });
@@ -7134,6 +7144,11 @@ function bindEvents() {
   });
   $("#professorLoginSelect").addEventListener("change", renderProfessorLogin);
   $("#professorViewImageBtn")?.addEventListener("click", openProfessorWeeklyImage);
+  $("#openProfessorWeeklyFullBtn")?.addEventListener("click", openProfessorWeeklyFullImage);
+  $("#closeProfessorWeeklyPreviewBtn")?.addEventListener("click", closeProfessorWeeklyPreview);
+  $("#professorWeeklyPreviewModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "professorWeeklyPreviewModal") closeProfessorWeeklyPreview();
+  });
   $("#professorPrintPdfBtn")?.addEventListener("click", openProfessorWeeklyPdf);
   $("#professorActualForm").addEventListener("change", (event) => {
     if (event.target.name === "slotId") renderProfessorLogin();
@@ -7253,6 +7268,9 @@ function bindEvents() {
     renderWeeklyTable();
     renderProfessorPlanning();
     renderProfessorLogin();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeProfessorWeeklyPreview();
   });
 
   document.addEventListener("click", (event) => {
