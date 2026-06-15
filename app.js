@@ -3015,8 +3015,6 @@ function renderTables() {
 
   renderPaperManagement();
   renderProfessorManagement();
-
-  renderSharePanels();
 }
 
 function paperGroupOptions(level) {
