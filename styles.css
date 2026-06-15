@@ -2513,3 +2513,452 @@ tr:last-child td {
   }
 
 }
+
+/* Compact presentation polish */
+:root {
+  --shadow: 0 6px 18px rgba(15, 32, 50, 0.06);
+  --panel: #fbfdff;
+  --soft: #eef4f8;
+}
+
+body {
+  font-size: 13px;
+  line-height: 1.35;
+  background:
+    linear-gradient(180deg, rgba(226, 236, 244, 0.82), rgba(241, 246, 250, 0.94)),
+    var(--bg);
+}
+
+body[data-theme="purple"] {
+  --bg: #f4f0fb;
+  --panel: #fcfbff;
+  --brand: #5b21b6;
+  --brand-dark: #3b0764;
+  --brand-soft: #eee7ff;
+  --nav: #e9ddff;
+  --line: #d8c9f4;
+  --blue: #7c3aed;
+  --green: #10b981;
+}
+
+body[data-theme="blue"] {
+  --bg: #edf5fb;
+  --panel: #fbfdff;
+  --brand: #0f6592;
+  --brand-dark: #0c4a6e;
+  --brand-soft: #dff1fb;
+  --nav: #d7edf7;
+}
+
+.topbar {
+  padding: 12px 18px;
+  gap: 12px;
+  border-bottom: 1px solid #c9d8e4;
+  box-shadow: 0 4px 16px rgba(17, 42, 58, 0.05);
+}
+
+h1 {
+  font-size: 23px;
+  letter-spacing: 0;
+}
+
+h2,
+.panel-head h2,
+.section-title {
+  font-size: 16px;
+}
+
+h3 {
+  font-size: 14px;
+}
+
+.subtitle,
+.panel-head p,
+.small,
+small {
+  font-size: 12px;
+}
+
+main {
+  padding: 10px 14px 18px;
+  gap: 10px;
+}
+
+.panel,
+.share-panel,
+.dashboard-card,
+.decision-card,
+.modal-card {
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  background: var(--panel);
+}
+
+.panel-head,
+.share-panel-head,
+.dashboard-head {
+  padding: 10px 14px;
+  min-height: 0;
+  gap: 10px;
+  background: linear-gradient(90deg, #f6fbfe 0%, #edf5f9 100%);
+}
+
+.tabs,
+.quick-jump {
+  gap: 5px;
+  padding: 5px;
+  border-radius: 8px;
+}
+
+.tab,
+.jump-link {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+button,
+.btn,
+input,
+select,
+textarea {
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+button,
+.btn {
+  min-height: 32px;
+  padding: 6px 11px;
+}
+
+input,
+select {
+  min-height: 32px;
+  padding: 5px 9px;
+}
+
+textarea {
+  min-height: 58px;
+  padding: 8px 10px;
+}
+
+.form-grid,
+.form-grid.compact,
+.filter-row,
+.weekly-tools,
+.dashboard-filters,
+.single-line-tools {
+  gap: 8px;
+}
+
+.form-grid label,
+.filter-row label,
+.weekly-tools label {
+  gap: 3px;
+}
+
+.kpi-grid,
+.insight-grid,
+.dashboard-grid {
+  gap: 8px;
+}
+
+.kpi,
+.mini-card,
+.stat-card,
+.insight-card {
+  padding: 9px 11px;
+  border-radius: 7px;
+}
+
+.kpi b,
+.mini-card b,
+.stat-card b {
+  font-size: 19px;
+}
+
+table {
+  font-size: 12px;
+}
+
+th,
+td {
+  padding: 7px 9px;
+  border-color: #d3dde8;
+}
+
+th {
+  font-size: 11px;
+  color: #0b2e3a;
+  background: #dbe9f2;
+  letter-spacing: 0;
+}
+
+.table-wrap {
+  border-radius: 7px;
+}
+
+.pill,
+.status,
+.tag,
+.badge {
+  min-height: 20px;
+  padding: 3px 7px;
+  font-size: 10px;
+  border-radius: 999px;
+}
+
+.weekly-summary-grid {
+  gap: 8px;
+  margin: 8px 10px;
+}
+
+.weekly-summary-grid .metric-card {
+  min-height: 50px;
+  padding: 8px 10px;
+}
+
+.weekly-summary-grid .metric-card strong {
+  font-size: 18px;
+}
+
+.weekly-scroll {
+  max-height: calc(100vh - 220px);
+  scroll-behavior: auto;
+}
+
+.weekly-table {
+  --date-col: 132px;
+  --time-col: 154px;
+  --batch-col: var(--weekly-batch-col, 168px);
+  font-size: 12px;
+}
+
+.weekly-table th,
+.weekly-table td {
+  padding: 5px 6px;
+}
+
+.weekly-table th {
+  height: 46px;
+  vertical-align: top;
+}
+
+.weekly-date-cell,
+.weekly-time-cell {
+  padding: 5px 7px;
+  background: #fff3df;
+}
+
+.weekly-time-cell {
+  grid-template-columns: 28px 1fr auto;
+  gap: 4px;
+}
+
+.weekly-time-cell input {
+  width: 58px;
+  min-height: 27px;
+  padding: 3px 5px;
+  font-size: 11px;
+}
+
+.slot-delete {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  font-size: 0;
+  border-radius: 999px;
+}
+
+.slot-delete::before {
+  content: "X";
+  font-size: 11px;
+}
+
+.weekly-cell {
+  min-height: 36px;
+  padding: 2px 4px;
+}
+
+.weekly-cell:not(.filled):not(.no-lecture) {
+  padding: 2px 4px;
+}
+
+.weekly-cell select,
+.weekly-cell input,
+.assignment-select {
+  min-height: 27px;
+  height: 27px;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+
+.assignment-chip {
+  min-height: 30px;
+  padding: 3px 6px;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.assignment-chip strong {
+  font-size: 11px;
+}
+
+.assignment-chip small {
+  font-size: 10px;
+}
+
+.date-start-row td {
+  border-top: 4px solid #0d2d3a;
+}
+
+.weekly-fullscreen .weekly-scroll {
+  max-height: calc(100vh - 74px);
+}
+
+.share-grid,
+.share-panel-body {
+  gap: 10px;
+}
+
+.share-preview {
+  padding: 10px;
+}
+
+.share-timetable {
+  font-size: 14px;
+}
+
+.share-timetable th,
+.share-timetable td {
+  padding: 6px 8px;
+}
+
+.planner-nav,
+.section-nav,
+.dashboard-tabs {
+  gap: 6px;
+}
+
+.nav-chip,
+.section-chip {
+  min-height: 28px;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
+.syllabus-toolbar,
+.syllabus-grid-tools {
+  padding: 8px 10px;
+  gap: 8px;
+}
+
+.syllabus-grid-table {
+  font-size: 11px;
+}
+
+.syllabus-grid-table th,
+.syllabus-grid-table td {
+  padding: 4px 5px;
+}
+
+.syllabus-topic-col {
+  width: 300px;
+  min-width: 300px;
+}
+
+.syllabus-hours-col {
+  left: 388px;
+  width: 72px;
+  min-width: 72px;
+}
+
+.syllabus-cell-control {
+  grid-template-columns: 62px minmax(78px, 1fr);
+  gap: 4px;
+}
+
+.syllabus-toggle {
+  width: 62px;
+  min-width: 62px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.syllabus-professor-select {
+  min-width: 78px;
+  height: 24px;
+  min-height: 24px;
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.allocation-workbench {
+  grid-template-columns: minmax(360px, 1fr) minmax(270px, 0.42fr);
+  gap: 10px;
+}
+
+.compact-topic-list {
+  max-height: 190px;
+}
+
+.compact-topic-list .topic-check {
+  min-height: 30px;
+  padding: 4px 6px;
+}
+
+.topic-check .topic-hours,
+.compact-topic-list .topic-hours {
+  width: 58px;
+  min-width: 58px;
+  min-height: 26px;
+}
+
+.professor-plan-grid {
+  grid-template-columns: minmax(360px, 1.05fr) minmax(320px, 0.95fr);
+  gap: 10px;
+  padding: 10px;
+}
+
+#professorManagementForm {
+  grid-template-columns: minmax(230px, 1.2fr) minmax(150px, 0.7fr) minmax(200px, 1fr) auto;
+  gap: 8px;
+}
+
+#professorManagementForm select[multiple] {
+  min-height: 48px;
+  max-height: 48px;
+}
+
+.master-grid,
+.split {
+  gap: 10px;
+}
+
+.excel-table th,
+.excel-table td {
+  border: 1px solid #cfdbe5;
+  padding: 6px 8px;
+}
+
+@media (max-width: 980px) {
+  body {
+    font-size: 12px;
+  }
+
+  .topbar,
+  main {
+    padding: 12px;
+  }
+
+  .weekly-table {
+    --date-col: 112px;
+    --time-col: 138px;
+    --batch-col: 150px;
+  }
+}
