@@ -3345,9 +3345,24 @@ function locationSlots(centre) {
     .sort((a, b) => `${a.date} ${a.start} ${batchById(a.batchId)?.name || ""}`.localeCompare(`${b.date} ${b.start} ${batchById(b.batchId)?.name || ""}`));
 }
 
+function locationSlotsByLevel(centre) {
+  const map = new Map();
+  locationSlots(centre).forEach((slot) => {
+    const batch = batchById(slot.batchId);
+    const level = batch?.level || "Other";
+    if (!map.has(level)) map.set(level, []);
+    map.get(level).push(slot);
+  });
+  return [...map.entries()].sort(([a], [b]) => levelOrder(a) - levelOrder(b) || String(a).localeCompare(String(b)));
+}
+
 function locationShareMessage(centre) {
   if (!centre) return "";
-  const lines = locationSlots(centre).map((slot) => slotLine(slot, true, true));
+  const groups = locationSlotsByLevel(centre);
+  const lines = groups.flatMap(([level, slots]) => [
+    `${level}`,
+    ...slots.map((slot) => slotLine(slot, true, true))
+  ]);
   return [
     `${centre} Branch Timetable`,
     `Week: ${fullDateLabel(selectedWeekStart)} to ${fullDateLabel(addDays(selectedWeekStart, 6))}`,
@@ -3368,24 +3383,31 @@ function renderLocationPreview(centre) {
   const batches = [...new Set(slots.map((slot) => batchById(slot.batchId)?.name).filter(Boolean))];
   const professors = [...new Set(lectureSlots.map((slot) => professorName(slotProfessorId(slot))))];
   const totalHours = lectureSlots.reduce((sum, slot) => sum + hoursBetween(slot.start, slot.end), 0);
-  const items = slots.map((slot) => {
-    const batch = batchById(slot.batchId);
-    const professorId = slotProfessorId(slot);
-    const subject = timetableSubjectLabel(slot, batch);
-    const teacher = slot.noLecture ? "No Lecture" : professorName(professorId);
-    const batchLines = batchTimetableLines(batch).filter(Boolean);
-    return `<tr>
-      <td class="tt-date-col">${escapeHtml(timetableDateLabel(slot.date))}</td>
-      <td class="tt-time-col">${escapeHtml(timetableDisplayTime(slot, "start"))}</td>
-      <td class="tt-time-col">${escapeHtml(timetableDisplayTime(slot, "end"))}</td>
-      <td class="tt-batch-detail-col" style="background:${escapeHtml(timetableLectureTone(slot, batchTimetableTone(batch)))}">
-        ${batchLines.map((line) => `<strong>${escapeHtml(line)}</strong>`).join("")}
-      </td>
-      <td class="tt-faculty-col tt-lecture-col" style="background:${escapeHtml(timetableLectureTone(slot, professorTimetableTone(professorId)))}">
-        <strong>${escapeHtml(teacher)}</strong>
-        <span>${escapeHtml(subject)}</span>
-      </td>
-    </tr>`;
+  const groups = locationSlotsByLevel(centre);
+  const items = groups.map(([level, levelSlots]) => {
+    const rows = levelSlots.map((slot) => {
+      const batch = batchById(slot.batchId);
+      const professorId = slotProfessorId(slot);
+      const subject = timetableSubjectLabel(slot, batch);
+      const teacher = slot.noLecture ? "No Lecture" : professorName(professorId);
+      const batchLines = batchTimetableLines(batch).filter(Boolean);
+      return `<tr>
+        <td class="tt-date-col">${escapeHtml(timetableDateLabel(slot.date))}</td>
+        <td class="tt-time-col">${escapeHtml(timetableDisplayTime(slot, "start"))}</td>
+        <td class="tt-time-col">${escapeHtml(timetableDisplayTime(slot, "end"))}</td>
+        <td class="tt-batch-detail-col" style="background:${escapeHtml(timetableLectureTone(slot, batchTimetableTone(batch)))}">
+          ${batchLines.map((line) => `<strong>${escapeHtml(line)}</strong>`).join("")}
+        </td>
+        <td class="tt-faculty-col tt-lecture-col" style="background:${escapeHtml(timetableLectureTone(slot, professorTimetableTone(professorId)))}">
+          <strong>${escapeHtml(teacher)}</strong>
+          <span>${escapeHtml(subject)}</span>
+        </td>
+      </tr>`;
+    }).join("");
+    return `
+      <tr class="tt-level-row"><th colspan="5">${escapeHtml(level)}</th></tr>
+      ${rows}
+    `;
   }).join("");
 
   $("#locationTimetablePreview").innerHTML = `
@@ -6354,25 +6376,29 @@ async function downloadProfessorImage() {
 
 function locationTimetableSvg(centre) {
   if (!centre) return "";
-  const slots = locationSlots(centre);
+  const groups = locationSlotsByLevel(centre);
   const width = 1220;
   const headingHeight = 78;
   const headerHeight = 54;
   const columns = [0, 220, 330, 440, 770, 1220];
-  const rowData = slots.map((slot) => {
-    const batch = batchById(slot.batchId);
-    const professorId = slotProfessorId(slot);
-    const batchLines = batchTimetableLines(batch).filter(Boolean);
-    const lectureLines = [slot.noLecture ? "No Lecture" : professorName(professorId), timetableSubjectLabel(slot, batch)].filter(Boolean);
-    return {
-      slot,
-      batch,
-      professorId,
-      batchLines,
-      lectureLines,
-      height: Math.max(85, 38 + Math.max(batchLines.length, lectureLines.length) * 24)
-    };
-  });
+  const rowData = groups.flatMap(([level, slots]) => [
+    { kind: "level", level, height: 42 },
+    ...slots.map((slot) => {
+      const batch = batchById(slot.batchId);
+      const professorId = slotProfessorId(slot);
+      const batchLines = batchTimetableLines(batch).filter(Boolean);
+      const lectureLines = [slot.noLecture ? "No Lecture" : professorName(professorId), timetableSubjectLabel(slot, batch)].filter(Boolean);
+      return {
+        kind: "slot",
+        slot,
+        batch,
+        professorId,
+        batchLines,
+        lectureLines,
+        height: Math.max(85, 38 + Math.max(batchLines.length, lectureLines.length) * 24)
+      };
+    })
+  ]);
   const bodyHeight = rowData.length ? rowData.reduce((sum, row) => sum + row.height, 0) : 85;
   const height = headingHeight + headerHeight + bodyHeight;
   const textBlock = (lines, x, y, widthValue, lineHeight, size, weight = 700) => lines.map((line, index) =>
@@ -6384,6 +6410,12 @@ function locationTimetableSvg(centre) {
     const y = nextY;
     nextY += row.height;
     rowLines.push(y);
+    if (row.kind === "level") {
+      return `
+        <rect x="0" y="${y}" width="${width}" height="${row.height}" fill="#e8f3f8"/>
+        <text x="18" y="${y + 28}" font-size="23" font-weight="800" fill="#0b2e3a">${svgEscape(row.level)}</text>
+      `;
+    }
     return `
       <rect x="${columns[0]}" y="${y}" width="${columns[1] - columns[0]}" height="${row.height}" fill="#fff"/>
       <rect x="${columns[1]}" y="${y}" width="${columns[2] - columns[1]}" height="${row.height}" fill="#fff"/>

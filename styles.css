@@ -2294,6 +2294,16 @@ tr:last-child td {
   font-weight: 700;
 }
 
+.tt-level-row th {
+  background: #e8f3f8;
+  color: #0b2e3a;
+  font-size: 18px;
+  font-weight: 900;
+  text-align: left;
+  padding: 8px 14px;
+  border-top: 3px solid #0b5d6b;
+}
+
 .topic-planner {
   border-top: 1px solid var(--line);
 }
