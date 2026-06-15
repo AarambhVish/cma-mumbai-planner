@@ -4262,15 +4262,28 @@ function notifyProfessorChange(professorId, slot, oldSlot = null, reason = "Time
 
 function renderProfessorNotifications(professorId) {
   const panel = $("#professorNotifications");
+  const flashPanel = $("#professorFlashNotifications");
   if (!panel) return;
   const rows = (data.notifications || [])
     .filter((item) => item.professorId === professorId)
     .slice(0, 8);
+  const unreadRows = rows.filter((item) => !item.read).slice(0, 3);
+  if (flashPanel) {
+    flashPanel.innerHTML = unreadRows.length ? unreadRows.map((item) => `<article class="professor-flash-alert">
+      <div>
+        <strong>${escapeHtml(item.reason || "Timetable changed")}</strong>
+        <span>Timetable changed to: ${escapeHtml(item.newText || "-")}</span>
+        ${item.oldText ? `<small>Old timetable: ${escapeHtml(item.oldText)}</small>` : ""}
+      </div>
+      <button class="tiny ghost" type="button" data-mark-notification-read="${escapeHtml(item.id)}">Seen</button>
+    </article>`).join("") : "";
+    flashPanel.classList.toggle("hidden", !unreadRows.length);
+  }
   panel.innerHTML = rows.length ? rows.map((item) => `<article class="professor-notification ${item.read ? "" : "unread"}">
     <strong>${escapeHtml(item.reason)}</strong>
     <span>${escapeHtml(new Date(item.createdAt).toLocaleString())}</span>
     ${item.oldText ? `<small>Old: ${escapeHtml(item.oldText)}</small>` : ""}
-    <small>New: ${escapeHtml(item.newText)}</small>
+    <small>Changed to: ${escapeHtml(item.newText)}</small>
   </article>`).join("") : `<div class="empty">No timetable change notifications for this professor.</div>`;
 }
 
@@ -7149,6 +7162,15 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const markNotificationReadId = event.target.dataset.markNotificationRead;
+    if (markNotificationReadId) {
+      const notification = data.notifications.find((item) => item.id === markNotificationReadId);
+      if (notification) {
+        notification.read = true;
+        saveData();
+      }
+      return;
+    }
     const deleteActualId = event.target.dataset.deleteActual;
     if (deleteActualId) {
       const entry = data.actualLectures.find((item) => item.id === deleteActualId);
