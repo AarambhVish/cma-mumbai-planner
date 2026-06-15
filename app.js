@@ -169,6 +169,9 @@ const paperShortNames = {
   "CMA USA Part 2 - Section E: Investment Decisions": "P2 Sec E",
   "CMA USA Part 2 - Section F: Professional Ethics": "P2 Sec F"
 };
+const baseCmaPapers = structuredClone(cmaPapers);
+const basePaperNumbers = { ...paperNumbers };
+const basePaperShortNames = { ...paperShortNames };
 
 const realProfessors = [
   { id: "radhika-miss", name: "Radhika Miss", speciality: "Law and Strategic Management", home: "Online", levels: ["Foundation", "Inter"], papers: ["Fundamentals of Business Laws", "Business Laws and Ethics", "Strategic Management"] },
@@ -824,6 +827,7 @@ function ensureImportedProfessor(entry) {
   papersToAdd.forEach((paper) => {
     if (!professor.papers.includes(paper)) professor.papers.push(paper);
   });
+  rememberProfessorMasterBackup(professor);
   return professor;
 }
 
@@ -832,10 +836,12 @@ function ensureImportedTimetable() {
   [...importedTimetableEntries, ...whatsappTimetableEntries].forEach(([date, start, end, professorName, subject, rawBatchName, noLecture, importSource]) => {
     const batchMeta = importedBatchMeta(rawBatchName, subject);
     if (!data.batches.some((batch) => batch.id === batchMeta.id)) {
-      data.batches.push({
+      const batch = {
         ...batchMeta,
         color: paletteForLevel(batchMeta.level)[data.batches.filter((batch) => batch.level === batchMeta.level).length % paletteForLevel(batchMeta.level).length]
-      });
+      };
+      data.batches.push(batch);
+      rememberBatchMasterBackup(batch);
     }
     const professor = professorName ? ensureImportedProfessor({
       name: professorName,
@@ -982,6 +988,134 @@ function restoreProfessorMasterBackups() {
   });
 }
 
+function batchMasterBackupFor(batch) {
+  return {
+    name: batch.name || "",
+    level: batch.level || "",
+    group: batch.group || "",
+    paper: batch.paper || "",
+    attempt: batch.attempt || "",
+    centre: batch.centre || "",
+    section: batch.section || "",
+    plannedHours: Number(batch.plannedHours || 0),
+    startDate: batch.startDate || "",
+    targetDate: batch.targetDate || "",
+    telegramChatId: batch.telegramChatId || "",
+    color: batch.color || ""
+  };
+}
+
+function rememberBatchMasterBackup(batch, options = {}) {
+  if (!batch?.id) return;
+  if (!data.settings.batchMasterBackup || typeof data.settings.batchMasterBackup !== "object" || Array.isArray(data.settings.batchMasterBackup)) {
+    data.settings.batchMasterBackup = {};
+  }
+  if (options.onlyIfMissing && data.settings.batchMasterBackup[batch.id]) return;
+  data.settings.batchMasterBackup[batch.id] = batchMasterBackupFor(batch);
+}
+
+function restoreBatchMasterBackups() {
+  const backups = data.settings.batchMasterBackup || {};
+  data.batches.forEach((batch) => {
+    const backup = backups[batch.id];
+    if (!backup) return;
+    Object.assign(batch, {
+      ...batch,
+      name: backup.name || batch.name,
+      level: backup.level || batch.level,
+      group: backup.group || batch.group,
+      paper: backup.paper || batch.paper,
+      attempt: backup.attempt || batch.attempt,
+      centre: backup.centre || batch.centre,
+      section: backup.section || batch.section,
+      plannedHours: Number(backup.plannedHours || batch.plannedHours || 0),
+      startDate: backup.startDate || batch.startDate,
+      targetDate: backup.targetDate || batch.targetDate,
+      telegramChatId: backup.telegramChatId || batch.telegramChatId || "",
+      color: backup.color || batch.color
+    });
+  });
+}
+
+function defaultPaperMasterRows() {
+  return Object.entries(baseCmaPapers).flatMap(([level, groups]) =>
+    Object.entries(groups).flatMap(([group, papers]) =>
+      papers.map((paper) => ({
+        id: slug(`${level}-${group}-${paper}`),
+        basePaper: paper,
+        level,
+        group,
+        paper,
+        paperNo: Number(basePaperNumbers[paper] || 0),
+        shortName: basePaperShortNames[paper] || "",
+        active: true
+      }))
+    )
+  );
+}
+
+function ensurePaperMasterShape() {
+  if (!Array.isArray(data.settings.paperMaster)) data.settings.paperMaster = defaultPaperMasterRows();
+  const existingIds = new Set(data.settings.paperMaster.map((row) => row.id));
+  defaultPaperMasterRows().forEach((row) => {
+    if (!existingIds.has(row.id)) data.settings.paperMaster.push(row);
+  });
+  data.settings.paperMaster = data.settings.paperMaster.map((row) => ({
+    id: row.id || uid("paper"),
+    basePaper: row.basePaper || "",
+    level: row.level || (activeProgram() === "CMA USA" ? "CMA USA Part 1" : "Foundation"),
+    group: row.group || Object.keys(baseCmaPapers[row.level] || {})[0] || "Foundation",
+    paper: cleanSheetText(row.paper || row.basePaper || "New Paper"),
+    paperNo: normalizePaperNo(row.paperNo),
+    shortName: cleanSheetText(row.shortName || ""),
+    active: row.active !== false
+  }));
+}
+
+function resetPaperObjectsToBase() {
+  Object.keys(cmaPapers).forEach((key) => delete cmaPapers[key]);
+  Object.assign(cmaPapers, structuredClone(baseCmaPapers));
+  Object.keys(paperNumbers).forEach((key) => delete paperNumbers[key]);
+  Object.assign(paperNumbers, basePaperNumbers);
+  Object.keys(paperShortNames).forEach((key) => delete paperShortNames[key]);
+  Object.assign(paperShortNames, basePaperShortNames);
+}
+
+function applyPaperMaster() {
+  if (!data.settings?.paperMaster) return;
+  resetPaperObjectsToBase();
+  data.settings.paperMaster.forEach((row) => {
+    if (!row.active || !row.paper) return;
+    if (!cmaPapers[row.level]) cmaPapers[row.level] = {};
+    if (!cmaPapers[row.level][row.group]) cmaPapers[row.level][row.group] = [];
+    const papers = cmaPapers[row.level][row.group];
+    const baseIndex = row.basePaper ? papers.indexOf(row.basePaper) : -1;
+    const existingIndex = papers.indexOf(row.paper);
+    if (baseIndex >= 0) papers[baseIndex] = row.paper;
+    else if (existingIndex < 0) papers.push(row.paper);
+    if (row.basePaper && row.basePaper !== row.paper) {
+      delete paperNumbers[row.basePaper];
+      delete paperShortNames[row.basePaper];
+    }
+    paperNumbers[row.paper] = Number(row.paperNo || paperNumbers[row.paper] || 0);
+    if (row.shortName) paperShortNames[row.paper] = row.shortName;
+  });
+}
+
+function migratePaperReferences(oldPaper, newPaper) {
+  if (!oldPaper || !newPaper || oldPaper === newPaper) return;
+  data.batches.forEach((batch) => {
+    if (batch.paper === oldPaper) batch.paper = newPaper;
+  });
+  data.professors.forEach((professor) => {
+    professor.papers = (professor.papers || []).map((paper) => paper === oldPaper ? newPaper : paper);
+    rememberProfessorMasterBackup(professor);
+  });
+  data.slots.forEach((slot) => {
+    if (slot.subject === oldPaper) slot.subject = newPaper;
+  });
+}
+
 function ensureDataShape() {
   data.settings = {
     ...structuredClone(defaultData.settings),
@@ -989,7 +1123,11 @@ function ensureDataShape() {
   };
   if (!Array.isArray(data.settings.googleImportHistory)) data.settings.googleImportHistory = [];
   if (!data.settings.professorMasterBackup || typeof data.settings.professorMasterBackup !== "object" || Array.isArray(data.settings.professorMasterBackup)) data.settings.professorMasterBackup = {};
+  if (!data.settings.batchMasterBackup || typeof data.settings.batchMasterBackup !== "object" || Array.isArray(data.settings.batchMasterBackup)) data.settings.batchMasterBackup = {};
+  ensurePaperMasterShape();
+  applyPaperMaster();
   (data.professors || []).forEach((professor) => rememberProfessorMasterBackup(professor, { onlyIfMissing: true }));
+  (data.batches || []).forEach((batch) => rememberBatchMasterBackup(batch, { onlyIfMissing: true }));
   if (!Array.isArray(data.topicPlans)) data.topicPlans = [];
   if (!Array.isArray(data.actualLectures)) data.actualLectures = [];
   if (!Array.isArray(data.notifications)) data.notifications = [];
@@ -1055,12 +1193,12 @@ function ensureDataShape() {
     if (!existing) {
       data.batches.push(structuredClone(batch));
     } else {
-      existing.name = batch.name;
-      existing.level = batch.level;
-      existing.attempt = batch.attempt;
-      existing.centre = batch.centre;
-      existing.group = batch.group;
-      existing.paper = subjectMigration[existing.paper] || batch.paper;
+      existing.name = existing.name || batch.name;
+      existing.level = existing.level || batch.level;
+      existing.attempt = existing.attempt || batch.attempt;
+      existing.centre = existing.centre || batch.centre;
+      existing.group = existing.group || batch.group;
+      existing.paper = subjectMigration[existing.paper] || existing.paper || batch.paper;
     }
   });
   data.professors = data.professors.map((professor) => ({
@@ -1074,11 +1212,12 @@ function ensureDataShape() {
   }));
   data.professors.forEach(cleanProfessorProgramMapping);
   restoreProfessorMasterBackups();
+  restoreBatchMasterBackups();
   data.batches = data.batches.map((batch, index) => {
     const normalized = normalizeBatchProgram({ ...batch });
     return {
       ...normalized,
-      plannedHours: normalized.level === "Final" && (!normalized.plannedHours || Number(normalized.plannedHours) === 400)
+      plannedHours: normalized.level === "Final" && (!normalized.plannedHours || Number(normalized.plannedHours) <= 0)
         ? standardPlannedHours(normalized.level, normalized.group, normalized.name)
         : normalized.plannedHours,
       professorId: undefined,
@@ -1704,6 +1843,7 @@ function navigationGroups() {
         { label: "Create Batch", target: "#batchForm" },
         { label: "Master Data", target: "#masterForm" },
         { label: "All Batches", target: "#masterBatchTable" },
+        { label: "Paper Management", target: "#paperMasterTable" },
         { label: "Professor Management", target: "#professorManagementTable" }
       ]
     }
@@ -2857,9 +2997,44 @@ function renderTables() {
     </td>
   </tr>`).join("") || `<tr><td colspan="7" class="empty">No batches match these filters.</td></tr>`;
 
+  renderPaperManagement();
   renderProfessorManagement();
 
   renderSharePanels();
+}
+
+function paperGroupOptions(level) {
+  return Object.keys(cmaPapers[level] || baseCmaPapers[level] || {});
+}
+
+function renderPaperManagement() {
+  const form = $("#paperMasterForm");
+  const table = $("#paperMasterTable");
+  if (!form || !table) return;
+  const defaultLevel = levelsForProgram()[0];
+  const defaultGroup = paperGroupOptions(defaultLevel)[0] || defaultLevel;
+  form.innerHTML = [
+    selectField("level", "Level", levelsForProgram().map((level) => ({ value: level, label: level })), defaultLevel),
+    field("group", "Group", "text", defaultGroup, "required"),
+    field("paperNo", "Paper No", "number", "", "min=\"1\" required"),
+    field("paper", "Paper Name", "text", "", "required"),
+    field("shortName", "Short Name", "text", "", "placeholder=\"e.g. Laws\""),
+    `<div class="row-actions wide"><button type="submit">Add Paper</button></div>`
+  ].join("");
+
+  const rows = (data.settings.paperMaster || [])
+    .filter((row) => levelsForProgram().includes(row.level))
+    .sort((a, b) => levelOrder(a.level) - levelOrder(b.level) || Number(a.paperNo) - Number(b.paperNo) || a.paper.localeCompare(b.paper));
+  table.innerHTML = rows.map((row) => `
+    <tr class="${row.active ? "" : "dummy-row"}">
+      <td><select data-paper-master="${escapeHtml(row.id)}" data-field="level">${levelsForProgram().map((level) => `<option value="${escapeHtml(level)}" ${row.level === level ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}</select></td>
+      <td><input data-paper-master="${escapeHtml(row.id)}" data-field="group" value="${escapeHtml(row.group)}"></td>
+      <td><input data-paper-master="${escapeHtml(row.id)}" data-field="paperNo" type="number" min="1" value="${escapeHtml(row.paperNo)}"></td>
+      <td><input data-paper-master="${escapeHtml(row.id)}" data-field="paper" value="${escapeHtml(row.paper)}"></td>
+      <td><input data-paper-master="${escapeHtml(row.id)}" data-field="shortName" value="${escapeHtml(row.shortName || "")}"></td>
+      <td><button class="tiny ghost" data-save-paper-master="${escapeHtml(row.id)}" type="button">Save</button></td>
+    </tr>
+  `).join("") || `<tr><td colspan="6" class="empty">No papers found for this program.</td></tr>`;
 }
 
 function renderProfessorManagement() {
@@ -5204,10 +5379,12 @@ function applyGoogleSheetEntries(entries, range, options = {}) {
     const batchMeta = importedBatchMeta(rawBatchName, subject);
     if (programForLevel(batchMeta.level) !== activeProgram()) return;
     if (!data.batches.some((batch) => batch.id === batchMeta.id)) {
-      data.batches.push({
+      const batch = {
         ...batchMeta,
         color: paletteForLevel(batchMeta.level)[data.batches.filter((batch) => batch.level === batchMeta.level).length % paletteForLevel(batchMeta.level).length]
-      });
+      };
+      data.batches.push(batch);
+      rememberBatchMasterBackup(batch);
     }
     const professor = professorName ? ensureImportedProfessor({
       name: professorName,
@@ -5368,6 +5545,7 @@ function ensureChangesTTBatch(rawBatchName, subject) {
     color: levelPalette[data.batches.filter((item) => item.level === batchMeta.level).length % levelPalette.length]
   };
   data.batches.push(batch);
+  rememberBatchMasterBackup(batch);
   return batch;
 }
 
@@ -5531,6 +5709,25 @@ function renderChangesTTPreview() {
     ...bad.map((row) => `Line ${row.index}: ${escapeHtml(row.error)} - ${escapeHtml(row.line)}`),
     renderChangesTTBatchPreview(good)
   ].join("<br>");
+}
+
+function formatChangesTTInput() {
+  const input = $("#changesTTInput");
+  const preview = $("#changesTTPreview");
+  if (!input) return;
+  const rows = parseChangesTTInput(input.value || "").filter((row) => row.ok);
+  if (!rows.length) {
+    alert("No readable TT change found to format. Please include Date, Batch, Subject and Professor.");
+    renderChangesTTPreview();
+    return;
+  }
+  input.value = rows.map((row) => {
+    const professor = row.noLecture ? "No Lecture" : cleanSheetText(row.professorName || "");
+    return `Please note there is change in TT Date : ${fullDateLabel(row.date)}, Batch : ${row.batchName}, Subjects : ${row.subject}, Professor : ${professor}`;
+  }).join("\n");
+  if (preview) {
+    preview.innerHTML = `${rows.length} change message${rows.length === 1 ? "" : "s"} formatted for sharing.<br>Keep the original time details if you want to apply the change to timetable after formatting.`;
+  }
 }
 
 function applyChangesTT() {
@@ -6287,7 +6484,7 @@ function addBatch(event) {
   const section = form.elements.section.value.trim();
   const firstGroup = Object.keys(cmaPapers[level])[0];
   const firstPaper = cmaPapers[level][firstGroup][0];
-  data.batches.push({
+  const batch = {
     id: uid("b"),
     name: batchCodeWithSection(level, attempt, centre, section),
     level,
@@ -6300,7 +6497,9 @@ function addBatch(event) {
     startDate: form.elements.startDate.value,
     targetDate: form.elements.targetDate.value,
     color: defaultLevelColor(level)
-  });
+  };
+  data.batches.push(batch);
+  rememberBatchMasterBackup(batch);
   form.reset();
   saveData();
 }
@@ -6312,6 +6511,57 @@ function addMaster(event) {
   data.settings.googleWebAppUrl = fixedCloudSyncUrl;
   const centre = form.elements.centre.value.trim();
   if (centre && !data.centres.includes(centre)) data.centres.push(centre);
+  form.reset();
+  saveData();
+}
+
+function savePaperMasterRow(id) {
+  const row = (data.settings.paperMaster || []).find((item) => item.id === id);
+  if (!row) return;
+  const oldPaper = row.paper;
+  $$(`[data-paper-master="${CSS.escape(id)}"]`).forEach((input) => {
+    const fieldName = input.dataset.field;
+    if (fieldName === "paperNo") row.paperNo = normalizePaperNo(input.value);
+    else row[fieldName] = cleanSheetText(input.value);
+  });
+  row.level = row.level || levelsForProgram()[0];
+  row.group = row.group || paperGroupOptions(row.level)[0] || row.level;
+  row.paperNo = normalizePaperNo(row.paperNo);
+  row.paper = row.paper || oldPaper;
+  row.shortName = cleanSheetText(row.shortName || "");
+  if (!row.paperNo || !row.paper) {
+    alert("Paper No and Paper Name are required.");
+    renderPaperManagement();
+    return;
+  }
+  if (oldPaper && row.paper && oldPaper !== row.paper) migratePaperReferences(oldPaper, row.paper);
+  ensurePaperMasterShape();
+  applyPaperMaster();
+  saveData();
+}
+
+function addPaperMaster(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const level = form.elements.level.value;
+  const group = cleanSheetText(form.elements.group.value || paperGroupOptions(level)[0] || level);
+  const paperNo = normalizePaperNo(form.elements.paperNo.value);
+  const paper = cleanSheetText(form.elements.paper.value);
+  if (!level || !group || !paperNo || !paper) {
+    alert("Please enter Level, Group, Paper No and Paper Name.");
+    return;
+  }
+  data.settings.paperMaster.push({
+    id: uid("paper"),
+    basePaper: "",
+    level,
+    group,
+    paperNo,
+    paper,
+    shortName: cleanSheetText(form.elements.shortName.value || ""),
+    active: true
+  });
+  applyPaperMaster();
   form.reset();
   saveData();
 }
@@ -6600,6 +6850,7 @@ function bindEvents() {
   if ($("#progressForm")) $("#progressForm").addEventListener("submit", addProgress);
   $("#batchForm").addEventListener("submit", addBatch);
   $("#masterForm").addEventListener("submit", addMaster);
+  $("#paperMasterForm")?.addEventListener("submit", addPaperMaster);
   $("#loginForm").addEventListener("submit", handleLogin);
   document.addEventListener("submit", (event) => {
     animateButton(event.submitter, "button-saved", 700);
@@ -6755,6 +7006,7 @@ function bindEvents() {
   });
   $("#changesTTInput")?.addEventListener("input", renderChangesTTPreview);
   $("#applyChangesTTBtn")?.addEventListener("click", applyChangesTT);
+  $("#formatChangesTTBtn")?.addEventListener("click", formatChangesTTInput);
   $("#whatsappChangesTTBtn")?.addEventListener("click", () => openWhatsAppShare(changesTTShareMessage()));
   $("#clearChangesTTBtn")?.addEventListener("click", () => {
     $("#changesTTInput").value = "";
@@ -6842,6 +7094,7 @@ function bindEvents() {
     const colorBatchId = event.target.dataset.batchColor;
     const deleteTopicPlanId = event.target.dataset.deleteTopicPlan;
     const saveProfessorId = event.target.dataset.saveProfessor;
+    const savePaperMasterId = event.target.dataset.savePaperMaster;
     const deleteProfessorId = event.target.dataset.deleteProfessor;
     const copyProfessorLoginId = event.target.dataset.copyProfessorLogin;
     const professorView = event.target.dataset.professorView;
@@ -6852,6 +7105,10 @@ function bindEvents() {
     }
     if (saveProfessorId) {
       saveProfessorManagement(saveProfessorId);
+      return;
+    }
+    if (savePaperMasterId) {
+      savePaperMasterRow(savePaperMasterId);
       return;
     }
     if (deleteProfessorId) {
@@ -6875,6 +7132,7 @@ function bindEvents() {
       const batch = batchById(colorBatchId);
       if (batch && paletteForLevel(batch.level).includes(event.target.dataset.color)) {
         batch.color = event.target.dataset.color;
+        rememberBatchMasterBackup(batch);
         saveData();
       }
       return;
@@ -6896,6 +7154,7 @@ function bindEvents() {
       data.batches = data.batches.filter((batch) => batch.id !== batchId);
       data.slots = data.slots.filter((slot) => slot.batchId !== batchId);
       data.progress = data.progress.filter((entry) => entry.batchId !== batchId);
+      if (data.settings.batchMasterBackup) delete data.settings.batchMasterBackup[batchId];
     }
     if (timeSlotDate) {
       if (deleteTimeSlotWithConfirmation(timeSlotDate, timeSlotStart, timeSlotEnd)) saveData();
@@ -6924,6 +7183,7 @@ function bindEvents() {
       if (event.target.dataset.field === "targetDate") {
         batch.targetDate = event.target.value;
       }
+      rememberBatchMasterBackup(batch);
       saveData();
       return;
     }
@@ -6932,6 +7192,7 @@ function bindEvents() {
     const batch = batchById(batchChatId);
     if (!batch) return;
     batch.telegramChatId = event.target.value.trim();
+    rememberBatchMasterBackup(batch);
     saveData();
   });
 
