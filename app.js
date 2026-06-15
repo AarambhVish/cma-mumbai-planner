@@ -2543,6 +2543,66 @@ function setTimeSlotsForDate(date, slots) {
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 
+function datesBetween(from, to) {
+  if (!from || !to || from > to) return [];
+  const dates = [];
+  let current = from;
+  while (current <= to && dates.length < 370) {
+    dates.push(current);
+    current = addDays(current, 1);
+  }
+  return dates;
+}
+
+function syncWeeklySlotControlDates() {
+  const weekEnd = addDays(selectedWeekStart, 6);
+  if ($("#weeklySlotDate") && !$("#weeklySlotDate").value) $("#weeklySlotDate").value = selectedWeekStart;
+  if ($("#weeklySlotFrom") && !$("#weeklySlotFrom").value) $("#weeklySlotFrom").value = selectedWeekStart;
+  if ($("#weeklySlotTo") && !$("#weeklySlotTo").value) $("#weeklySlotTo").value = weekEnd;
+}
+
+function resetWeeklySlotControlDates() {
+  const weekEnd = addDays(selectedWeekStart, 6);
+  if ($("#weeklySlotDate")) $("#weeklySlotDate").value = selectedWeekStart;
+  if ($("#weeklySlotFrom")) $("#weeklySlotFrom").value = selectedWeekStart;
+  if ($("#weeklySlotTo")) $("#weeklySlotTo").value = weekEnd;
+}
+
+function weeklySlotScopeDates() {
+  const scope = $("#weeklySlotScope")?.value || "specific";
+  if (scope === "week") return Array.from({ length: 7 }, (_, index) => addDays(selectedWeekStart, index));
+  if (scope === "range") {
+    const from = $("#weeklySlotFrom")?.value || selectedWeekStart;
+    const to = $("#weeklySlotTo")?.value || addDays(selectedWeekStart, 6);
+    const dates = datesBetween(from, to);
+    if (!dates.length) alert("Please select a valid From and To date.");
+    return dates;
+  }
+  return [$("#weeklySlotDate")?.value || selectedWeekStart];
+}
+
+function addTimeSlotToDate(date, start, end) {
+  const daySlots = timeSlotsForDate(date);
+  if (daySlots.some((slot) => slot.start === start && slot.end === end)) return false;
+  setTimeSlotsForDate(date, [...daySlots, { start, end }]);
+  return true;
+}
+
+function moveTimeSlotOnDate(date, previousStart, previousEnd, start, end) {
+  const daySlots = timeSlotsForDate(date);
+  const index = daySlots.findIndex((slot) => slot.start === previousStart && slot.end === previousEnd);
+  if (index === -1) return false;
+  daySlots[index] = { start, end };
+  data.slots.forEach((slot) => {
+    if (slot.date === date && slot.start === previousStart && slot.end === previousEnd) {
+      slot.start = start;
+      slot.end = end;
+    }
+  });
+  setTimeSlotsForDate(date, daySlots);
+  return true;
+}
+
 function allKnownTimeSlots() {
   const map = new Map();
   [...data.timeSlots, ...Object.values(data.dateTimeSlots || {}).flat()].forEach((slot) => {
@@ -5000,6 +5060,9 @@ function deleteTimeSlotWithConfirmation(date, start, end) {
 
 function renderWeeklyTable() {
   $("#weekStart").value = selectedWeekStart;
+  if ($("#weeklySlotDate")) $("#weeklySlotDate").value = $("#weeklySlotDate").value || selectedWeekStart;
+  if ($("#weeklySlotFrom")) $("#weeklySlotFrom").value = $("#weeklySlotFrom").value || selectedWeekStart;
+  if ($("#weeklySlotTo")) $("#weeklySlotTo").value = $("#weeklySlotTo").value || addDays(selectedWeekStart, 6);
   const selectedDays = selectedValues($("#dayFilter"));
   const activeDays = selectedDays.length ? selectedDays : ["All"];
   const dates = activeDays.includes("All")
@@ -5108,17 +5171,22 @@ function addSlot(event) {
 }
 
 function addWeeklyRow() {
-  const range = prompt("Enter time slot, e.g. 4pm-6pm or 16:00-18:00");
-  if (!range) return;
-  const parsed = parseTimeRange(range);
-  if (!parsed) {
-    alert("Please enter a valid time slot like 7am-10am.");
+  const start = parseTimePart($("#weeklySlotStart")?.value || "");
+  const end = parseTimePart($("#weeklySlotEnd")?.value || "");
+  if (!start || !end || hoursBetween(start, end) <= 0) {
+    alert("Please enter valid Time In and Time Out, e.g. 7am and 10am.");
     return;
   }
-  const { start, end } = parsed;
-  const exists = data.timeSlots.some((slot) => slot.start === start && slot.end === end);
-  if (!exists) data.timeSlots.push({ start, end });
-  data.timeSlots.sort((a, b) => a.start.localeCompare(b.start));
+  const dates = weeklySlotScopeDates();
+  if (!dates.length) return;
+  let added = 0;
+  dates.forEach((date) => {
+    if (addTimeSlotToDate(date, start, end)) added += 1;
+  });
+  if (!added) {
+    alert("This time slot already exists for the selected date/s.");
+    return;
+  }
   renderFilters();
   saveData();
 }
@@ -5992,14 +6060,17 @@ function updateTimeSlot(event) {
     renderWeeklyTable();
     return;
   }
-  daySlots[index] = parsed;
-  data.slots.forEach((slot) => {
-    if (slot.date === date && slot.start === previousStart && slot.end === previousEnd) {
-      slot.start = parsed.start;
-      slot.end = parsed.end;
-    }
+  const scopeDates = weeklySlotScopeDates();
+  const targetDates = scopeDates.length ? scopeDates : [date];
+  if (!targetDates.includes(date)) targetDates.unshift(date);
+  let moved = 0;
+  targetDates.forEach((targetDate) => {
+    if (moveTimeSlotOnDate(targetDate, previousStart, previousEnd, parsed.start, parsed.end)) moved += 1;
   });
-  setTimeSlotsForDate(date, daySlots);
+  if (!moved) {
+    renderWeeklyTable();
+    return;
+  }
   saveData();
 }
 
@@ -7140,6 +7211,7 @@ function bindEvents() {
   $("#weekStart").addEventListener("change", (event) => {
     selectedWeekStart = formatDateInput(getFriday(new Date(`${event.target.value}T00:00:00`)));
     if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
+    resetWeeklySlotControlDates();
     renderWeeklyTable();
     renderProfessorPlanning();
     renderProfessorLogin();
@@ -7147,6 +7219,7 @@ function bindEvents() {
   $("#prevWeekBtn").addEventListener("click", () => {
     selectedWeekStart = addDays(selectedWeekStart, -7);
     if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
+    resetWeeklySlotControlDates();
     renderWeeklyTable();
     renderProfessorPlanning();
     renderProfessorLogin();
@@ -7154,6 +7227,7 @@ function bindEvents() {
   $("#nextWeekBtn").addEventListener("click", () => {
     selectedWeekStart = addDays(selectedWeekStart, 7);
     if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
+    resetWeeklySlotControlDates();
     renderWeeklyTable();
     renderProfessorPlanning();
     renderProfessorLogin();

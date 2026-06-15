@@ -2724,6 +2724,33 @@ th {
   font-size: 18px;
 }
 
+.slot-range-tools {
+  display: grid;
+  grid-template-columns: 64px 64px 96px 112px 112px 112px;
+  align-items: end;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #cfe0ea;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.slot-range-tools label {
+  min-width: 0;
+  color: #40566a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.slot-range-tools input,
+.slot-range-tools select {
+  width: 100%;
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
 .weekly-scroll {
   max-height: calc(100vh - 220px);
   scroll-behavior: auto;
@@ -2960,5 +2987,9 @@ th {
     --date-col: 112px;
     --time-col: 138px;
     --batch-col: 150px;
+  }
+
+  .slot-range-tools {
+    grid-template-columns: repeat(2, minmax(92px, 1fr));
   }
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260615-compact-polish">
+    <link rel="stylesheet" href="styles.css?v=20260615-weekly-slot-scope">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -197,6 +197,36 @@
                 <input id="importFullSheetToggle" type="checkbox">
                 Full sheet
               </label>
+              <div class="slot-range-tools" aria-label="Add or move weekly time slot">
+                <label>
+                  Time In
+                  <input id="weeklySlotStart" type="text" placeholder="7am">
+                </label>
+                <label>
+                  Time Out
+                  <input id="weeklySlotEnd" type="text" placeholder="10am">
+                </label>
+                <label>
+                  Apply
+                  <select id="weeklySlotScope">
+                    <option value="specific">This Date</option>
+                    <option value="week">All Days</option>
+                    <option value="range">Date Range</option>
+                  </select>
+                </label>
+                <label>
+                  Date
+                  <input id="weeklySlotDate" type="date">
+                </label>
+                <label>
+                  From
+                  <input id="weeklySlotFrom" type="date">
+                </label>
+                <label>
+                  To
+                  <input id="weeklySlotTo" type="date">
+                </label>
+              </div>
               <button id="addWeeklyRowBtn" type="button">Add Time Slot</button>
               <button class="import-sheet-btn" id="importGoogleSheetBtn" type="button" title="Import timetable from Google Sheet and save it in this software">Import Google Sheet</button>
               <button class="ghost" id="weeklyFullscreenBtn" type="button">Full Screen</button>
@@ -796,6 +826,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260615-compact-polish"></script>
+    <script src="app.js?v=20260615-weekly-slot-scope"></script>
   </body>
 </html>
