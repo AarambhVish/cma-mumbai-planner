@@ -6614,9 +6614,31 @@ function openProfessorWeeklyImage() {
   const professorId = loggedInProfessorId() || $("#professorLoginSelect")?.value;
   const svg = professorWeeklySvg(professorId);
   if (!svg) return;
+  const modal = $("#professorWeeklyPreviewModal");
+  const body = $("#professorWeeklyPreviewBody");
+  if (modal && body) {
+    body.innerHTML = svg;
+    modal.dataset.professorId = professorId || "";
+    modal.classList.remove("hidden");
+    return;
+  }
+  openProfessorWeeklyFullImage();
+}
+
+function openProfessorWeeklyFullImage() {
+  const professorId = $("#professorWeeklyPreviewModal")?.dataset.professorId || loggedInProfessorId() || $("#professorLoginSelect")?.value;
+  const svg = professorWeeklySvg(professorId);
+  if (!svg) return;
   const blob = new Blob([svg], { type: "image/svg+xml" });
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank");
+}
+
+function closeProfessorWeeklyPreview() {
+  const modal = $("#professorWeeklyPreviewModal");
+  const body = $("#professorWeeklyPreviewBody");
+  if (body) body.innerHTML = "";
+  modal?.classList.add("hidden");
 }
 
 function openProfessorWeeklyPdf() {
