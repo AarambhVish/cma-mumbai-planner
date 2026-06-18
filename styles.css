@@ -1222,6 +1222,18 @@ table {
   border-radius: 0;
   background: rgba(255, 255, 255, 0.38);
   contain: layout paint style;
+  --entry-strip: transparent;
+}
+
+.weekly-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 3;
+  width: 0;
+  background: var(--entry-strip);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .weekly-cell select,
@@ -1389,6 +1401,23 @@ select[multiple] {
 
 .weekly-cell.filled {
   border-left: 4px solid var(--green);
+}
+
+.weekly-cell.filled::before,
+.weekly-cell.no-lecture::before {
+  width: 6px;
+  opacity: 0.78;
+}
+
+.weekly-cell.filled::after,
+.weekly-cell.no-lecture::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--entry-strip) 22%, transparent), transparent 46%);
+  opacity: 0.65;
+  pointer-events: none;
 }
 
 .weekly-cell.filled,

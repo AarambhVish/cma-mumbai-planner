@@ -5212,7 +5212,7 @@ function weeklyCellMetaHtml(batch, slot) {
   const professorId = slotProfessorId(slot || { batchId: batch?.id || "", professorId: "" });
   const subject = slot ? slotSubject(slot) : "";
   if (professorId) {
-    return `<div class="weekly-meta assignment-chip" style="background:${escapeHtml(professorColor(professorId))}">
+    return `<div class="weekly-meta assignment-chip" style="background:${escapeHtml(professorColor(professorId))}" title="${escapeHtml(weeklyCellHoverText(batch, slot))}">
       <strong title="${escapeHtml(professorName(professorId))}">${escapeHtml(professorName(professorId))}</strong>
       <span title="${escapeHtml(paperShort(batch?.level, subject))}">${escapeHtml(paperShort(batch?.level, subject))}</span>
     </div>`;
@@ -5223,6 +5223,20 @@ function weeklyCellMetaHtml(batch, slot) {
   return `<div class="weekly-meta open-meta"></div>`;
 }
 
+function weeklyCellHoverText(batch, slot) {
+  if (!slot) return `${batch?.name || "Batch"}\nOpen`;
+  const professorId = slotProfessorId(slot);
+  const lines = [
+    `${fullDateLabel(slot.date)} | ${formatTimeRange(slot.start, slot.end)}`,
+    `Batch: ${batch?.name || "-"}`,
+    slot.noLecture ? "No Lecture" : `Professor: ${professorName(professorId) || "Open"}`,
+    slot.noLecture ? "" : `Paper: ${paperShort(batch?.level, slotSubject(slot)) || "-"}`
+  ].filter(Boolean);
+  if (slotHasProfessorConflict(slot)) lines.push("Conflict: Same professor in another batch");
+  if (isChangedTT(slot)) lines.push("Changed TT");
+  return lines.join("\n");
+}
+
 function refreshWeeklyCell(select, batch, slot) {
   const cell = select.closest(".weekly-cell");
   if (!cell) return;
@@ -5231,9 +5245,12 @@ function refreshWeeklyCell(select, batch, slot) {
   cell.classList.toggle("filled", Boolean(professorId));
   cell.classList.toggle("no-lecture", Boolean(slot?.noLecture));
   cell.classList.toggle("conflict", Boolean(slot && professorId && slotHasProfessorConflict(slot)));
+  cell.style.setProperty("--entry-strip", professorId ? professorColor(professorId) : slot?.noLecture ? "#cbd5e1" : "transparent");
+  cell.title = weeklyCellHoverText(batch, slot);
   cell.querySelector(".weekly-meta")?.remove();
   cell.insertAdjacentHTML("afterbegin", weeklyCellMetaHtml(batch, slot));
   select.dataset.optionsLoaded = "0";
+  select.title = weeklyCellHoverText(batch, slot);
   select.innerHTML = compactWeeklyAssignmentOptions(batch, slot, filled ? professorId : "", slot ? slotSubject(slot) : "");
 }
 
@@ -5323,10 +5340,12 @@ function renderWeeklyTable() {
         const cellClass = `${hiddenByProfessor ? "hidden-by-professor" : noLecture ? "no-lecture" : conflict ? "conflict" : filled ? "filled" : ""} ${isDummy(slot) ? "dummy-weekly" : ""}`;
         const assignmentStyle = noLecture ? `style="background:#e7f0fb"` : "";
         const meta = weeklyCellMetaHtml(batch, slot);
+        const hoverText = weeklyCellHoverText(batch, slot);
+        const stripColor = professorId ? professorColor(professorId) : noLecture ? "#cbd5e1" : "transparent";
         return `<td style="background:${escapeHtml(cellTint(batchColor(batch)))}">
-          <div class="weekly-cell ${cellClass}">
+          <div class="weekly-cell ${cellClass}" style="--entry-strip:${escapeHtml(stripColor)}" title="${escapeHtml(hoverText)}">
             ${meta}
-            <select class="assignment-select" ${assignmentStyle} data-weekly-cell="1" data-field="assignment" data-options-loaded="0" data-batch-id="${escapeHtml(batch.id)}" data-date="${escapeHtml(date)}" data-start="${escapeHtml(timeSlot.start)}" data-end="${escapeHtml(timeSlot.end)}">
+            <select class="assignment-select" ${assignmentStyle} title="${escapeHtml(hoverText)}" data-weekly-cell="1" data-field="assignment" data-options-loaded="0" data-batch-id="${escapeHtml(batch.id)}" data-date="${escapeHtml(date)}" data-start="${escapeHtml(timeSlot.start)}" data-end="${escapeHtml(timeSlot.end)}">
               ${compactWeeklyAssignmentOptions(batch, slot, filled ? professorId : "", subject)}
             </select>
             <div class="weekly-badges">
