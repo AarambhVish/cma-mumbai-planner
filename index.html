@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260618-master-filters-compact-professors">
+    <link rel="stylesheet" href="styles.css?v=20260618-master-batch-row-dropdown">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -751,6 +751,10 @@ Professor : Sandesh Sir
             <span id="masterBatchCount"></span>
           </div>
           <div class="master-local-filters">
+            <label class="wide-filter">
+              Batch
+              <select id="masterBatchNameFilter"></select>
+            </label>
             <label>
               Level
               <select id="masterBatchLevelFilter"></select>
@@ -870,6 +874,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260618-master-filters-compact-professors"></script>
+    <script src="app.js?v=20260618-master-batch-row-dropdown"></script>
   </body>
 </html>

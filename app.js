@@ -3214,18 +3214,23 @@ function renderTables() {
   let masterBatchLevel = $("#masterBatchLevelFilter")?.value || "All";
   let masterBatchAttempt = $("#masterBatchAttemptFilter")?.value || "All";
   let masterBatchCentre = $("#masterBatchCentreFilter")?.value || "All";
+  let masterBatchName = $("#masterBatchNameFilter")?.value || "All";
   const allMasterBatches = activeProgramBatches();
   const batchLevels = [...new Set(allMasterBatches.map((batch) => batch.level).filter(Boolean))]
     .sort((a, b) => levelOrder(a) - levelOrder(b));
   const batchAttempts = [...new Set(allMasterBatches.map((batch) => batch.attempt).filter(Boolean))].sort();
   const batchCentres = [...new Set(allMasterBatches.map((batch) => batch.centre).filter(Boolean))].sort();
+  const batchNames = [...new Set(allMasterBatches.map((batch) => batch.name).filter(Boolean))].sort();
+  setOptions($("#masterBatchNameFilter"), batchNames, masterBatchName, true);
   setOptions($("#masterBatchLevelFilter"), batchLevels, masterBatchLevel, true);
   setOptions($("#masterBatchAttemptFilter"), batchAttempts, masterBatchAttempt, true);
   setOptions($("#masterBatchCentreFilter"), batchCentres, masterBatchCentre, true);
+  masterBatchName = $("#masterBatchNameFilter")?.value || "All";
   masterBatchLevel = $("#masterBatchLevelFilter")?.value || "All";
   masterBatchAttempt = $("#masterBatchAttemptFilter")?.value || "All";
   masterBatchCentre = $("#masterBatchCentreFilter")?.value || "All";
   const masterBatches = allMasterBatches.filter((batch) =>
+    (masterBatchName === "All" || batch.name === masterBatchName) &&
     (masterBatchLevel === "All" || batch.level === masterBatchLevel) &&
     (masterBatchAttempt === "All" || batch.attempt === masterBatchAttempt) &&
     (masterBatchCentre === "All" || batch.centre === masterBatchCentre)
@@ -7332,7 +7337,7 @@ function bindEvents() {
   $("#batchForm").addEventListener("submit", addBatch);
   $("#masterForm").addEventListener("submit", addMaster);
   $("#paperMasterForm")?.addEventListener("submit", addPaperMaster);
-  ["masterBatchLevelFilter", "masterBatchAttemptFilter", "masterBatchCentreFilter"].forEach((id) => {
+  ["masterBatchNameFilter", "masterBatchLevelFilter", "masterBatchAttemptFilter", "masterBatchCentreFilter"].forEach((id) => {
     $(`#${id}`)?.addEventListener("change", renderTables);
   });
   ["paperMasterLevelFilter", "paperMasterGroupFilter"].forEach((id) => {
