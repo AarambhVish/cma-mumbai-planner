@@ -1034,13 +1034,11 @@ function restoreProfessorMasterBackups() {
   data.professors.forEach((professor) => {
     const backup = backups[professor.id];
     if (!backup) return;
-    const levels = [...new Set([...(professor.levels || []), ...(backup.levels || [])])];
-    const papers = [...new Set([...(professor.papers || []), ...(backup.papers || [])])];
     professor.name = backup.name || professor.name;
     professor.speciality = backup.speciality || professor.speciality;
     professor.home = backup.home || professor.home;
-    professor.levels = levels.length ? levels : professor.levels;
-    professor.papers = papers.length ? papers : professor.papers;
+    professor.levels = Array.isArray(backup.levels) ? [...backup.levels] : professor.levels;
+    professor.papers = Array.isArray(backup.papers) ? [...backup.papers] : professor.papers;
     professor.headPaperNos = Array.isArray(backup.headPaperNos) ? backup.headPaperNos.map(normalizePaperNo).filter(Boolean) : professor.headPaperNos;
     professor.loginId = backup.loginId || professor.loginId;
     professor.loginPassword = backup.loginPassword || professor.loginPassword;
@@ -1056,6 +1054,7 @@ function restoreProfessorMasterBackups() {
 function mergeProfessorDirectoryMaster() {
   professorDirectoryMaster.forEach((entry) => {
     let professor = data.professors.find((item) => item.id === entry.id);
+    const isNewProfessor = !professor;
     if (!professor) {
       professor = {
         id: entry.id,
@@ -1071,11 +1070,11 @@ function mergeProfessorDirectoryMaster() {
       };
       data.professors.push(professor);
     }
-    professor.name = entry.name || professor.name;
-    professor.course = entry.course || professor.course || "";
-    professor.location = entry.location || professor.location || "";
-    professor.line = entry.line || professor.line || "";
-    professor.home = entry.location || professor.home || "Online";
+    professor.name = isNewProfessor ? entry.name : (professor.name || entry.name);
+    professor.course = professor.course || entry.course || "";
+    professor.location = professor.location || entry.location || "";
+    professor.line = professor.line || entry.line || "";
+    professor.home = professor.home || professor.location || entry.location || "Online";
     professor.mobileHash = entry.hash || professor.mobileHash || "";
     professor.levels = [...new Set([...(professor.levels || []), ...(entry.levels || [])])];
     professor.papers = [...new Set([...(professor.papers || []), ...(entry.papers || [])])];
@@ -2258,6 +2257,22 @@ function requestCloudData(url, timeoutMs = 12000) {
   });
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function verifyCloudSave(url, saveStamp, attempts = 6) {
+  let lastResponse = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) await wait(3500);
+    const response = await requestCloudData(url, 20000);
+    lastResponse = response;
+    const cloudStamp = response?.data?.settings?.lastCloudSavedAt || "";
+    if (response?.ok && cloudStamp === saveStamp) return response;
+  }
+  return lastResponse;
+}
+
 function googleImportedSlots(sourceData = data) {
   return (sourceData.slots || []).filter((slot) => String(slot.importSource || "").startsWith(googleSheetSource.importSource));
 }
@@ -2307,6 +2322,30 @@ function preserveNewerLocalGoogleImports(localData, cloudData) {
   return merged;
 }
 
+function preserveLocalMasterSettings(localData, incomingData) {
+  const merged = structuredClone(incomingData || {});
+  const localSettings = localData?.settings || {};
+  const incomingSettings = merged.settings || {};
+  merged.settings = {
+    ...incomingSettings,
+    professorMasterBackup: {
+      ...(incomingSettings.professorMasterBackup || {}),
+      ...(localSettings.professorMasterBackup || {})
+    },
+    batchMasterBackup: {
+      ...(incomingSettings.batchMasterBackup || {}),
+      ...(localSettings.batchMasterBackup || {})
+    },
+    paperMaster: Array.isArray(localSettings.paperMaster) && localSettings.paperMaster.length
+      ? structuredClone(localSettings.paperMaster)
+      : incomingSettings.paperMaster
+  };
+  ["professorDirectory20260618Applied", "rahulLawPapersApplied", "levelBatchDefaultsApplied"].forEach((key) => {
+    merged.settings[key] = Boolean(incomingSettings[key] || localSettings[key]);
+  });
+  return merged;
+}
+
 async function loadCloudData() {
   const url = requireCloudSyncUrl();
   if (!url) return;
@@ -2325,7 +2364,8 @@ async function loadCloudData() {
       return;
     }
     const localBeforeLoad = structuredClone(data);
-    data = { ...structuredClone(defaultData), ...preserveNewerLocalGoogleImports(localBeforeLoad, response.data) };
+    const cloudWithImports = preserveNewerLocalGoogleImports(localBeforeLoad, response.data);
+    data = { ...structuredClone(defaultData), ...preserveLocalMasterSettings(localBeforeLoad, cloudWithImports) };
     ensureDataShape();
     data.settings.googleWebAppUrl = fixedCloudSyncUrl;
     saveData({ skipCloudSave: true });
@@ -2381,20 +2421,22 @@ function saveCloudData(options = {}) {
   setTimeout(async () => {
     if (completed) return;
     try {
-      const response = await requestCloudData(url, 20000);
+      const response = await verifyCloudSave(url, saveStamp);
+      if (completed) return;
       const cloudStamp = response?.data?.settings?.lastCloudSavedAt || "";
       if (!response?.ok || cloudStamp !== saveStamp) {
-        throw new Error(response?.error || "Cloud save could not be verified.");
+        throw new Error(response?.error || "Cloud save was sent, but Google did not return the new saved timestamp yet.");
       }
       completed = true;
       cleanup();
       updateCloudStatus(`Saved ${new Date(saveStamp).toLocaleTimeString()}`, "saved");
       if (!silent) alert(`Planner data saved and verified at ${new Date(saveStamp).toLocaleString()}.\n\n${timetableSummaryText()}`);
     } catch (error) {
+      if (completed) return;
       completed = true;
       cleanup();
       updateCloudStatus("Save not verified", "error");
-      if (!silent) alert(`${error.message} Please confirm Apps Script was deployed as a new Web App version, then press Cloud Save again.`);
+      if (!silent) alert(`${error.message}\n\nPlease wait a few seconds and press Cloud Load to check whether the latest data is visible. If it is not visible, redeploy the Google Apps Script as a new Web App version and press Cloud Save again.`);
     }
   }, 6000);
 
@@ -2404,7 +2446,7 @@ function saveCloudData(options = {}) {
     cleanup();
     updateCloudStatus("Save timeout", "error");
     if (!silent) alert("Cloud Save did not confirm within 45 seconds. Please check internet and Apps Script deployment, then try Cloud Save again.");
-  }, 45000);
+  }, 90000);
 }
 
 function uid(prefix) {
@@ -3169,7 +3211,25 @@ function renderTables() {
     }).join("") || `<tr><td colspan="7" class="empty">No progress entries yet.</td></tr>`;
   }
 
-  const masterBatches = filteredBatches();
+  let masterBatchLevel = $("#masterBatchLevelFilter")?.value || "All";
+  let masterBatchAttempt = $("#masterBatchAttemptFilter")?.value || "All";
+  let masterBatchCentre = $("#masterBatchCentreFilter")?.value || "All";
+  const allMasterBatches = activeProgramBatches();
+  const batchLevels = [...new Set(allMasterBatches.map((batch) => batch.level).filter(Boolean))]
+    .sort((a, b) => levelOrder(a) - levelOrder(b));
+  const batchAttempts = [...new Set(allMasterBatches.map((batch) => batch.attempt).filter(Boolean))].sort();
+  const batchCentres = [...new Set(allMasterBatches.map((batch) => batch.centre).filter(Boolean))].sort();
+  setOptions($("#masterBatchLevelFilter"), batchLevels, masterBatchLevel, true);
+  setOptions($("#masterBatchAttemptFilter"), batchAttempts, masterBatchAttempt, true);
+  setOptions($("#masterBatchCentreFilter"), batchCentres, masterBatchCentre, true);
+  masterBatchLevel = $("#masterBatchLevelFilter")?.value || "All";
+  masterBatchAttempt = $("#masterBatchAttemptFilter")?.value || "All";
+  masterBatchCentre = $("#masterBatchCentreFilter")?.value || "All";
+  const masterBatches = allMasterBatches.filter((batch) =>
+    (masterBatchLevel === "All" || batch.level === masterBatchLevel) &&
+    (masterBatchAttempt === "All" || batch.attempt === masterBatchAttempt) &&
+    (masterBatchCentre === "All" || batch.centre === masterBatchCentre)
+  ).sort((a, b) => levelOrder(a.level) - levelOrder(b.level) || data.batches.indexOf(a) - data.batches.indexOf(b));
   $("#masterBatchCount").textContent = `${masterBatches.length} of ${activeProgramBatches().length} ${activeProgram()} batches`;
   $("#masterBatchTable").innerHTML = masterBatches.map((batch) => `<tr>
     <td><strong>${escapeHtml(batch.name)}</strong></td>
@@ -3202,10 +3262,11 @@ function renderPaperManagement() {
   const form = $("#paperMasterForm");
   const table = $("#paperMasterTable");
   if (!form || !table) return;
+  const programLevels = levelsForProgram();
   const defaultLevel = levelsForProgram()[0];
   const defaultGroup = paperGroupOptions(defaultLevel)[0] || defaultLevel;
   form.innerHTML = [
-    selectField("level", "Level", levelsForProgram().map((level) => ({ value: level, label: level })), defaultLevel),
+    selectField("level", "Level", programLevels.map((level) => ({ value: level, label: level })), defaultLevel),
     field("group", "Group", "text", defaultGroup, "required"),
     field("paperCode", "Paper Code", "text", "", "placeholder=\"e.g. Paper 1A or P9B\" required"),
     field("paper", "Paper Name", "text", "", "required"),
@@ -3213,8 +3274,26 @@ function renderPaperManagement() {
     `<div class="row-actions wide"><button type="submit">Add Paper</button></div>`
   ].join("");
 
-  const rows = (data.settings.paperMaster || [])
-    .filter((row) => levelsForProgram().includes(row.level))
+  let selectedLevel = $("#paperMasterLevelFilter")?.value || "All";
+  let selectedGroup = $("#paperMasterGroupFilter")?.value || "All";
+  const search = cleanSheetText($("#paperMasterSearch")?.value || "").toLowerCase();
+  const programRows = (data.settings.paperMaster || []).filter((row) => programLevels.includes(row.level));
+  const groupOptions = [...new Set(programRows
+    .filter((row) => selectedLevel === "All" || row.level === selectedLevel)
+    .map((row) => row.group)
+    .filter(Boolean))].sort();
+  setOptions($("#paperMasterLevelFilter"), programLevels, selectedLevel, true);
+  setOptions($("#paperMasterGroupFilter"), groupOptions, selectedGroup, true);
+  selectedLevel = $("#paperMasterLevelFilter")?.value || "All";
+  selectedGroup = $("#paperMasterGroupFilter")?.value || "All";
+  const rows = programRows
+    .filter((row) => selectedLevel === "All" || row.level === selectedLevel)
+    .filter((row) => selectedGroup === "All" || row.group === selectedGroup)
+    .filter((row) => {
+      if (!search) return true;
+      return [row.paperCode, `P${row.paperNo}`, row.paper, row.shortName, row.group, row.level]
+        .some((value) => cleanSheetText(value || "").toLowerCase().includes(search));
+    })
     .sort((a, b) => levelOrder(a.level) - levelOrder(b.level) || normalizePaperNo(a.paperNo || a.paperCode) - normalizePaperNo(b.paperNo || b.paperCode) || a.paper.localeCompare(b.paper));
   table.innerHTML = rows.map((row) => `
     <tr class="${row.active ? "" : "dummy-row"}">
@@ -3252,7 +3331,6 @@ function renderProfessorManagement() {
     field("course", "Course", "text", "", "placeholder=\"CMA India / CMA USA\""),
     field("location", "Location", "text", "", "placeholder=\"e.g. Borivali\""),
     field("line", "Line", "text", "", "placeholder=\"Western / Central\""),
-    field("whatsappMobile", "WhatsApp Mobile", "text", "", "placeholder=\"Private, not in GitHub\""),
     `<label><span>Levels</span><select name="levels" multiple>${levelsForProgram().map((option) => `<option value="${escapeHtml(option)}" selected>${escapeHtml(option)}</option>`).join("")}</select></label>`,
     `<label><span>Paper / Section</span><select name="paperNos" multiple>${paperNos.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(paperCodeLabel(option))}</option>`).join("")}</select></label>`,
     `<div class="row-actions professor-add-actions"><button type="submit">Add Professor</button></div>`
@@ -3275,15 +3353,15 @@ function renderProfessorManagement() {
       .map((paper) => `<span class="paper-chip" style="background:${escapeHtml(cellTint(professor.color || professorColor(professor.id)))}">${escapeHtml(paperShort(null, paper))}</span>`)
       .join("");
     return `<tr data-professor-row="${escapeHtml(professor.id)}">
-      <td class="professor-name-cell">
+      <td class="professor-name-cell professor-profile-cell">
         <input data-professor-name="${escapeHtml(professor.id)}" value="${escapeHtml(professor.name)}" style="border-color:${escapeHtml(professor.color || professorColor(professor.id))}">
         <strong>${escapeHtml(professor.name)}</strong>
+        <div class="professor-inline-meta">
+          <label><span>Course</span><input data-professor-course="${escapeHtml(professor.id)}" value="${escapeHtml(professor.course || "")}" placeholder="Course"></label>
+          <label><span>Location</span><input data-professor-location="${escapeHtml(professor.id)}" value="${escapeHtml(professor.location || professor.home || "")}" placeholder="Location"></label>
+          <label><span>Line</span><input data-professor-line="${escapeHtml(professor.id)}" value="${escapeHtml(professor.line || "")}" placeholder="Line"></label>
+        </div>
       </td>
-      <td><input data-professor-course="${escapeHtml(professor.id)}" value="${escapeHtml(professor.course || "")}" placeholder="CMA India / CMA USA"></td>
-      <td><input data-professor-location="${escapeHtml(professor.id)}" value="${escapeHtml(professor.location || professor.home || "")}" placeholder="Location"></td>
-      <td><input data-professor-line="${escapeHtml(professor.id)}" value="${escapeHtml(professor.line || "")}" placeholder="Line"></td>
-      <td><code title="${escapeHtml(professor.mobileHash || "No hash saved")}">${escapeHtml(professor.mobileHash ? `${professor.mobileHash.slice(0, 10)}...` : "-")}</code></td>
-      <td><input data-professor-whatsapp="${escapeHtml(professor.id)}" value="${escapeHtml(professor.whatsappMobile || "")}" placeholder="Private mobile"></td>
       <td>
         <select multiple data-professor-levels="${escapeHtml(professor.id)}">
           ${levelsForProgram().map((level) => `<option value="${escapeHtml(level)}" ${(professor.levels || []).includes(level) ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}
@@ -3318,7 +3396,7 @@ function renderProfessorManagement() {
         </div>
       </td>
     </tr>`;
-  }).join("") || `<tr><td colspan="13" class="empty">No faculty found for this view.</td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty">No faculty found for this view.</td></tr>`;
 }
 
 function slotsForCurrentWeek({ applyWeeklyFilters = true } = {}) {
@@ -7061,7 +7139,9 @@ function saveProfessorManagement(professorId) {
   professor.location = cleanSheetText(locationInput?.value || professor.location || "");
   professor.line = cleanSheetText(lineInput?.value || professor.line || "");
   professor.home = professor.location || professor.home || "Online";
-  professor.whatsappMobile = cleanMobileNumber(whatsappInput?.value || "");
+  professor.whatsappMobile = whatsappInput
+    ? cleanMobileNumber(whatsappInput.value || "")
+    : professor.whatsappMobile || "";
   const otherProgramLevels = (professor.levels || []).filter((level) => !levelsForProgram().includes(level));
   const programLevels = selectedLevels.length ? selectedLevels : levelsForProgram();
   professor.levels = [...otherProgramLevels, ...programLevels];
@@ -7233,6 +7313,13 @@ function bindEvents() {
   $("#batchForm").addEventListener("submit", addBatch);
   $("#masterForm").addEventListener("submit", addMaster);
   $("#paperMasterForm")?.addEventListener("submit", addPaperMaster);
+  ["masterBatchLevelFilter", "masterBatchAttemptFilter", "masterBatchCentreFilter"].forEach((id) => {
+    $(`#${id}`)?.addEventListener("change", renderTables);
+  });
+  ["paperMasterLevelFilter", "paperMasterGroupFilter"].forEach((id) => {
+    $(`#${id}`)?.addEventListener("change", renderPaperManagement);
+  });
+  $("#paperMasterSearch")?.addEventListener("input", renderPaperManagement);
   $("#loginForm").addEventListener("submit", handleLogin);
   document.addEventListener("submit", (event) => {
     animateButton(event.submitter, "button-saved", 700);
