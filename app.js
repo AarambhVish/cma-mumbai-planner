@@ -3232,23 +3232,41 @@ function renderTables() {
   ).sort((a, b) => levelOrder(a.level) - levelOrder(b.level) || data.batches.indexOf(a) - data.batches.indexOf(b));
   $("#masterBatchCount").textContent = `${masterBatches.length} of ${activeProgramBatches().length} ${activeProgram()} batches`;
   $("#masterBatchTable").innerHTML = masterBatches.map((batch) => `<tr>
-    <td><strong>${escapeHtml(batch.name)}</strong></td>
-    <td>${escapeHtml(batch.level)}</td>
-    <td>${escapeHtml(batch.attempt)}</td>
-    <td>${escapeHtml(batch.centre)}</td>
-    <td>${escapeHtml(batch.targetDate)}</td>
-    <td><input class="chat-id-input" value="${escapeHtml(batch.telegramChatId || "")}" data-batch-chat-id="${batch.id}" placeholder="-100..."></td>
+    <td class="batch-master-name">
+      <strong>${escapeHtml(batch.name)}</strong>
+      <span>${escapeHtml(batch.level)} | ${escapeHtml(batch.attempt)} | ${escapeHtml(batch.centre)}</span>
+    </td>
     <td>
-      <div class="batch-actions">
-        <div class="swatches" title="Batch colour">
-          ${paletteForLevel(batch.level).map((color) => `<button class="swatch ${batchColor(batch) === color ? "selected" : ""}" style="background:${escapeHtml(color)}" data-batch-color="${batch.id}" data-color="${escapeHtml(color)}" type="button" aria-label="Set batch colour"></button>`).join("")}
-        </div>
-        <button class="tiny ghost" data-move-batch="${batch.id}" data-direction="-1" type="button">Left</button>
-        <button class="tiny ghost" data-move-batch="${batch.id}" data-direction="1" type="button">Right</button>
-        <button class="tiny danger" data-delete-batch="${batch.id}">Delete</button>
+      <div class="batch-master-summary">
+        <span>${escapeHtml(batch.level)}</span>
+        <span>${escapeHtml(batch.attempt)}</span>
+        <span>${escapeHtml(batch.centre)}</span>
+        <span>Target ${escapeHtml(batch.targetDate || "-")}</span>
       </div>
     </td>
-  </tr>`).join("") || `<tr><td colspan="7" class="empty">No batches match these filters.</td></tr>`;
+    <td>
+      <details class="batch-master-details">
+        <summary>Manage</summary>
+        <div class="batch-master-dropdown">
+          <label>
+            <span>Telegram Chat ID</span>
+            <input class="chat-id-input" value="${escapeHtml(batch.telegramChatId || "")}" data-batch-chat-id="${batch.id}" placeholder="-100...">
+          </label>
+          <label>
+            <span>Colour</span>
+            <div class="swatches" title="Batch colour">
+              ${paletteForLevel(batch.level).map((color) => `<button class="swatch ${batchColor(batch) === color ? "selected" : ""}" style="background:${escapeHtml(color)}" data-batch-color="${batch.id}" data-color="${escapeHtml(color)}" type="button" aria-label="Set batch colour"></button>`).join("")}
+            </div>
+          </label>
+          <div class="batch-actions">
+            <button class="tiny ghost" data-move-batch="${batch.id}" data-direction="-1" type="button">Left</button>
+            <button class="tiny ghost" data-move-batch="${batch.id}" data-direction="1" type="button">Right</button>
+            <button class="tiny danger" data-delete-batch="${batch.id}">Delete</button>
+          </div>
+        </div>
+      </details>
+    </td>
+  </tr>`).join("") || `<tr><td colspan="3" class="empty">No batches match these filters.</td></tr>`;
 
   renderPaperManagement();
   renderProfessorManagement();
