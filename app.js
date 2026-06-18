@@ -190,6 +190,61 @@ const realProfessors = [
   { id: "chirag-jain-sir", name: "Chirag Jain Sir", speciality: "Corporate Laws", home: "Online", levels: ["Final"], papers: ["Corporate and Economic Laws"] },
   { id: "swapnil-sir", name: "Swapnil Sir", speciality: "Direct Tax", home: "Online", levels: ["Final"], papers: ["Direct Tax Laws & International Taxation"] }
 ];
+const directoryPapers = {
+  1: ["Fundamentals of Business Laws", "Business Communication"],
+  2: ["Fundamentals of Financial Accounting"],
+  3: ["Fundamentals of Business Maths & Stats"],
+  4: ["Fundamentals of Business Economics", "Fundamentals of Business Management"],
+  5: ["Business Laws and Ethics"],
+  6: ["Financial Accounting"],
+  7: ["Direct and Indirect Taxation"],
+  8: ["Cost Accounting"],
+  9: ["Operations Management"],
+  10: ["Corporate Accounting", "Auditing"],
+  11: ["Business Data Analytics"],
+  12: ["Management Accounting"],
+  13: ["Corporate and Economic Laws"],
+  15: ["Direct Tax Laws & International Taxation"],
+  16: ["Strategic Cost Management (SCM)"],
+  17: ["Cost and Management Audit"],
+  18: ["Corporate Financial Reporting"],
+  19: ["Indirect Tax Laws and Practice"],
+  20: ["Strategic Performance Mgmt & Business Valuation"]
+};
+const cmaUsaAllPapers = [
+  ...cmaPapers["CMA USA Part 1"]["Part 1"],
+  ...cmaPapers["CMA USA Part 2"]["Part 2"]
+];
+const cmaUsaPart1Papers = cmaPapers["CMA USA Part 1"]["Part 1"];
+const cmaUsaPart2Papers = cmaPapers["CMA USA Part 2"]["Part 2"];
+const papersByNos = (paperNos) => [...new Set(paperNos.flatMap((paperNo) => directoryPapers[paperNo] || []))];
+const professorDirectoryMaster = [
+  { id: "dilip-sir", name: "Prof. Dilip Vishwakarma", hash: "e35ddec745d43dc18a5a8f1e656ab53b76591e601546f462652c22d3230c9591", course: "CMA India + CMA USA", levels: ["Foundation", "Inter", "Final", "CMA USA Part 1", "CMA USA Part 2"], location: "Kandivali", line: "Western", papers: [...papersByNos([2, 8, 11, 12, 16, 18, 20]), ...cmaUsaAllPapers] },
+  { id: "sandesh-g-sir", name: "Prof. Sandesh Gupta", hash: "9ed9f46fd1ed13e2e476b67d95952ba9f3d89f484f6c28afcd77d6a6e1eb671c", course: "CMA India + CMA USA", levels: ["Foundation", "Inter", "Final", "CMA USA Part 1", "CMA USA Part 2"], location: "Chembur", line: "Central", papers: [...papersByNos([2, 3, 6, 8, 10, 11, 12]), ...cmaUsaAllPapers] },
+  { id: "sumit-sir", name: "Prof. Sumit Redekar", hash: "f9fc5e6535acd864ddae47ce2f84042f6298669377d55df11dbc0aa2a2ab296e", course: "CMA India + CMA USA", levels: ["Foundation", "Inter", "Final", "CMA USA Part 1", "CMA USA Part 2"], location: "Parel", line: "Central", papers: [...papersByNos([3, 9, 16]), ...cmaUsaAllPapers] },
+  { id: "radhika-miss", name: "Prof. Radhika Mane", hash: "f1a6fc55c8a89e7fec3e267dbdcd21acd0fdd8d0cb652519948033bc85ebfa48", course: "CMA India", levels: ["Foundation", "Inter", "Final"], location: "Jogeshwari", line: "Western", papers: papersByNos([1, 5, 13]) },
+  { id: "gaorav-sir", name: "Prof. Gaorav Tawari", hash: "ea3c29b7338cc7cba80be5ebb1c796fdfd0b2d5a8bc7a3585b69cf86912037e3", course: "CMA India + CMA USA", levels: ["Inter", "Final", "CMA USA Part 1"], location: "Dombivali", line: "Central", papers: [...papersByNos([7, 10, 15, 17, 18]), ...cmaUsaPart1Papers] },
+  { id: "nitin-sir", name: "Prof. Nitin Shrivastav", hash: "63a3fb291616fca284cd38008d9bee9d51211e2bb10c7d874be95af592df30b9", course: "CMA India + CMA USA", levels: ["Inter", "Final", "CMA USA Part 1", "CMA USA Part 2"], location: "Mulund", line: "Central", papers: [...papersByNos([8, 10, 11, 12]), ...cmaUsaAllPapers] },
+  { id: "payal-parekh", name: "Prof. Payal Parekh", hash: "52ed60005af2bdf9547cf7df5a40a58305886e75759777fe4aecc54258656ceb", course: "CMA India", levels: ["Foundation"], location: "Ghatkopar", line: "Central", papers: papersByNos([4]) },
+  { id: "raina-thakkar", name: "Prof. Raina Thakkar", hash: "ccaedb4276dee2685695e135a348eef11f5174ff3bec98acb4d328cd0e613066", course: "CMA India", levels: ["Foundation"], location: "Mulund", line: "Central", papers: papersByNos([3]) },
+  { id: "sp-shukla", name: "Prof. SP Shukla", hash: "6edc340363ecd55bc7c5e8edfd0c5e25f1f8675bbecf1c1c2b9a59466c217b30", course: "CMA India", levels: ["Foundation"], location: "Dombivali", line: "Central", papers: papersByNos([4]) },
+  { id: "chirag-jain-sir", name: "Prof. Chirag Jain", hash: "054335be2d847308d914d92b30bea10e6b3ee444635f38982feda27e96e261c4", course: "CMA India", levels: ["Foundation", "Inter", "Final"], location: "Borivali", line: "Western", papers: papersByNos([1, 4, 5]) },
+  { id: "jeet-shah-sir", name: "Prof. Jeet Shah", hash: "355d93bba087ce9751bd3de56b1768d5a3bfaa399839cf6eef1b975d98ef8147", course: "CMA India", levels: ["Inter", "Final"], location: "Andheri", line: "Western", papers: papersByNos([7, 11, 19]) },
+  { id: "jigar-joshi-sir", name: "Prof. Jigar Joshi", hash: "05380f4c07477989a331a6cedbea83498350f1e5ab5c91ad5fcce695f6f64c2f", course: "CMA India + CMA USA", levels: ["Inter", "CMA USA Part 2"], location: "Virar", line: "Western", papers: [...papersByNos([11]), ...cmaUsaPart2Papers] },
+  { id: "jignesh-sir", name: "Prof. Jignesh Sangani", hash: "4f26ff1f82618ab78db92d04a8db4e0e6bd691f192e752869c3b58bb197aff14", course: "CMA India + CMA USA", levels: ["Inter", "Final", "CMA USA Part 1", "CMA USA Part 2"], location: "Vasai", line: "Western", papers: [...papersByNos([8, 12, 16, 18]), ...cmaUsaAllPapers] },
+  { id: "manisha-miss", name: "Prof. Manisha Lath", hash: "035521206e702fd9a99f8d055640540036285b6cfc78094ca22c6200e7a8cc1c", course: "CMA India", levels: ["Foundation"], location: "Mira Road", line: "Western", papers: papersByNos([3]) },
+  { id: "pradeep-yadav", name: "Prof. Pradeep Yadav", hash: "03c03646c4686a1e9f43092024027dfc99722d994aa3a9ecea8f8bf5a72ae1f9", course: "CMA India", levels: ["Foundation", "Inter"], location: "Mira Road", line: "Western", papers: papersByNos([2, 6]) },
+  { id: "rahul-b-sir", name: "Prof. Rahul Bhuvad", hash: "d3bd38fbed5f78e6da8cbd0bd8b7f28a3208d813d1b91481850fac0219410939", course: "CMA India", levels: ["Foundation", "Inter", "Final"], location: "Malad", line: "Western", papers: papersByNos([1, 4, 13]) },
+  { id: "ravi-patel-sir", name: "Prof. Ravi Patel", hash: "ce89a797f4af8f516663e2a357742b0a270d909c8f67f7483bd1e484e1488875", course: "CMA India", levels: ["Foundation"], location: "Prabhadevi", line: "Western", papers: papersByNos([3]) },
+  { id: "yasin-sir", name: "Prof. Yasin Pradhan", hash: "c31d9d6fc5265faa8aebae234bdae3968fc8d1b56ba691ba41509a9e04c4c9c6", course: "CMA India", levels: ["Foundation", "Inter"], location: "Borivali", line: "Western", papers: papersByNos([2, 6, 10, 11]) },
+  { id: "tushar-desai", name: "Prof. Tushar Desai", hash: "cfbf25f6e3ae8b6e0ace600e8d1c0956b840090940b9ff934e2c89d42109e64a", course: "CMA India", levels: ["Foundation", "Inter"], location: "Borivali", line: "Western", papers: papersByNos([2, 6, 10, 11]) },
+  { id: "rakesh-aswani", name: "Prof. Rakesh Aswani", hash: "2d0f0645b5645e6b55adaa0bcadad7884d637897a9831d08974dc636dd883f5a", course: "CMA India", levels: ["Foundation"], location: "Ulhasnagar", line: "Central", papers: papersByNos([4]) },
+  { id: "nishikant-sathe", name: "Prof. Nishikant Sathe", hash: "6497368abd00539be69e442e9193e087dcfecefedef69d32e16501ecc96ecd67", course: "CMA India", levels: ["Inter"], location: "Dombivli", line: "Central", papers: papersByNos([2, 6]) },
+  { id: "ruchi-miss", name: "Prof. Ruchi Chaurasia", hash: "257eee5781d39dd4cfd4a1efccdff1e349102fb38250a7825c0e025384ad5e99", course: "CMA India + CMA USA", levels: ["Foundation", "CMA USA Part 1", "CMA USA Part 2"], location: "Mainelines", line: "Western", papers: [...papersByNos([4]), ...cmaUsaAllPapers] },
+  { id: "sandeep-kanaujiya", name: "Prof. Sandeep Kanaujiya", hash: "678a11993da1f4cb6c36f0aeb7f882136b3130fb6c23fc9fc6da09e3249a8cc4", course: "CMA India", levels: ["Foundation"], location: "Nallasopara", line: "Western", papers: papersByNos([4]) },
+  { id: "parag-shah", name: "Prof. Parag Shah", hash: "caf302e01b7b14917485e5817cdfc5b75f0d55983c9cb3165b73ae44967195e0", course: "CMA India", levels: ["Inter"], location: "", line: "", papers: papersByNos([7]) },
+  { id: "yash-mundhra", name: "Prof. Yash Mundhra", hash: "5b1cfda17cf7e8d972f75f12a8de91135f259bdce0deaf7d7b6657b349131d5a", course: "CMA India", levels: ["Inter"], location: "Bhayender", line: "Western", papers: papersByNos([7]) }
+];
 const indiaProfessorMaster = new Map(realProfessors.map((professor) => [professor.id, professor]));
 
 function topicRows(paperNo, paperName, rows) {
@@ -956,7 +1011,12 @@ function professorMasterBackupFor(professor) {
     headPaperNos: Array.isArray(professor.headPaperNos) ? professor.headPaperNos.map(normalizePaperNo).filter(Boolean) : [],
     loginId: professor.loginId || "",
     loginPassword: professor.loginPassword || "",
-    color: professor.color || ""
+    color: professor.color || "",
+    course: professor.course || "",
+    location: professor.location || "",
+    line: professor.line || "",
+    mobileHash: professor.mobileHash || "",
+    whatsappMobile: professor.whatsappMobile || ""
   };
 }
 
@@ -985,6 +1045,44 @@ function restoreProfessorMasterBackups() {
     professor.loginId = backup.loginId || professor.loginId;
     professor.loginPassword = backup.loginPassword || professor.loginPassword;
     professor.color = backup.color || professor.color;
+    professor.course = backup.course || professor.course;
+    professor.location = backup.location || professor.location;
+    professor.line = backup.line || professor.line;
+    professor.mobileHash = backup.mobileHash || professor.mobileHash;
+    professor.whatsappMobile = backup.whatsappMobile || professor.whatsappMobile;
+  });
+}
+
+function mergeProfessorDirectoryMaster() {
+  professorDirectoryMaster.forEach((entry) => {
+    let professor = data.professors.find((item) => item.id === entry.id);
+    if (!professor) {
+      professor = {
+        id: entry.id,
+        name: entry.name,
+        speciality: entry.papers.map((paper) => paperShort(null, paper)).join(", "),
+        home: entry.location || "Online",
+        levels: [],
+        papers: [],
+        headPaperNos: [],
+        loginId: professorFirstNameCredential(entry.name),
+        loginPassword: professorFirstNameCredential(entry.name),
+        color: professorPalette[data.professors.length % professorPalette.length]
+      };
+      data.professors.push(professor);
+    }
+    professor.name = entry.name || professor.name;
+    professor.course = entry.course || professor.course || "";
+    professor.location = entry.location || professor.location || "";
+    professor.line = entry.line || professor.line || "";
+    professor.home = entry.location || professor.home || "Online";
+    professor.mobileHash = entry.hash || professor.mobileHash || "";
+    professor.levels = [...new Set([...(professor.levels || []), ...(entry.levels || [])])];
+    professor.papers = [...new Set([...(professor.papers || []), ...(entry.papers || [])])];
+    professor.speciality = professor.speciality || entry.papers.map((paper) => paperShort(null, paper)).join(", ");
+    professor.loginId = professor.loginId || professorFirstNameCredential(professor.name);
+    professor.loginPassword = professor.loginPassword || professorFirstNameCredential(professor.name);
+    rememberProfessorMasterBackup(professor);
   });
 }
 
@@ -1210,10 +1308,19 @@ function ensureDataShape() {
     headPaperNos: Array.isArray(professor.headPaperNos) ? professor.headPaperNos.map(normalizePaperNo).filter(Boolean) : [],
     loginId: isOldAutoProfessorLogin(professor) ? professorFirstNameCredential(professor.name) : professor.loginId,
     loginPassword: isOldAutoProfessorPassword(professor) ? professorFirstNameCredential(professor.name) : professor.loginPassword,
-    color: professor.color || professorPalette[data.professors.findIndex((item) => item.id === professor.id) % professorPalette.length]
+    color: professor.color || professorPalette[data.professors.findIndex((item) => item.id === professor.id) % professorPalette.length],
+    course: professor.course || "",
+    location: professor.location || professor.home || "",
+    line: professor.line || "",
+    mobileHash: professor.mobileHash || "",
+    whatsappMobile: professor.whatsappMobile || ""
   }));
   data.professors.forEach(cleanProfessorProgramMapping);
   restoreProfessorMasterBackups();
+  if (!data.settings.professorDirectory20260618Applied) {
+    mergeProfessorDirectoryMaster();
+    data.settings.professorDirectory20260618Applied = true;
+  }
   if (!data.settings.rahulLawPapersApplied) {
     const rahul = data.professors.find((professor) => professor.id === "rahul-b-sir" || professor.name === "Rahul B. Sir");
     if (rahul) {
@@ -3142,6 +3249,10 @@ function renderProfessorManagement() {
   $("#professorManagementPaper").disabled = professorManagementView !== "paper";
   $("#professorManagementForm").innerHTML = [
     field("name", "New Professor Name", "text", "", "placeholder=\"Prof Name\" required"),
+    field("course", "Course", "text", "", "placeholder=\"CMA India / CMA USA\""),
+    field("location", "Location", "text", "", "placeholder=\"e.g. Borivali\""),
+    field("line", "Line", "text", "", "placeholder=\"Western / Central\""),
+    field("whatsappMobile", "WhatsApp Mobile", "text", "", "placeholder=\"Private, not in GitHub\""),
     `<label><span>Levels</span><select name="levels" multiple>${levelsForProgram().map((option) => `<option value="${escapeHtml(option)}" selected>${escapeHtml(option)}</option>`).join("")}</select></label>`,
     `<label><span>Paper / Section</span><select name="paperNos" multiple>${paperNos.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(paperCodeLabel(option))}</option>`).join("")}</select></label>`,
     `<div class="row-actions professor-add-actions"><button type="submit">Add Professor</button></div>`
@@ -3168,6 +3279,11 @@ function renderProfessorManagement() {
         <input data-professor-name="${escapeHtml(professor.id)}" value="${escapeHtml(professor.name)}" style="border-color:${escapeHtml(professor.color || professorColor(professor.id))}">
         <strong>${escapeHtml(professor.name)}</strong>
       </td>
+      <td><input data-professor-course="${escapeHtml(professor.id)}" value="${escapeHtml(professor.course || "")}" placeholder="CMA India / CMA USA"></td>
+      <td><input data-professor-location="${escapeHtml(professor.id)}" value="${escapeHtml(professor.location || professor.home || "")}" placeholder="Location"></td>
+      <td><input data-professor-line="${escapeHtml(professor.id)}" value="${escapeHtml(professor.line || "")}" placeholder="Line"></td>
+      <td><code title="${escapeHtml(professor.mobileHash || "No hash saved")}">${escapeHtml(professor.mobileHash ? `${professor.mobileHash.slice(0, 10)}...` : "-")}</code></td>
+      <td><input data-professor-whatsapp="${escapeHtml(professor.id)}" value="${escapeHtml(professor.whatsappMobile || "")}" placeholder="Private mobile"></td>
       <td>
         <select multiple data-professor-levels="${escapeHtml(professor.id)}">
           ${levelsForProgram().map((level) => `<option value="${escapeHtml(level)}" ${(professor.levels || []).includes(level) ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}
@@ -3197,11 +3313,12 @@ function renderProfessorManagement() {
         <div class="row-actions">
           <button class="tiny ghost" data-save-professor="${escapeHtml(professor.id)}" type="button">Save</button>
           <button class="tiny ghost" data-copy-professor-login="${escapeHtml(professor.id)}" type="button">Copy Login</button>
+          <button class="tiny ghost" data-whatsapp-professor="${escapeHtml(professor.id)}" type="button">WhatsApp TT</button>
           <button class="tiny danger" data-delete-professor="${escapeHtml(professor.id)}" type="button">Delete</button>
         </div>
       </td>
     </tr>`;
-  }).join("") || `<tr><td colspan="8" class="empty">No faculty found for this view.</td></tr>`;
+  }).join("") || `<tr><td colspan="13" class="empty">No faculty found for this view.</td></tr>`;
 }
 
 function slotsForCurrentWeek({ applyWeeklyFilters = true } = {}) {
@@ -6247,6 +6364,29 @@ function openWhatsAppShare(text) {
   window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
 }
 
+function cleanMobileNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function professorWhatsAppNumber(professor) {
+  const mobile = cleanMobileNumber(professor?.whatsappMobile || "");
+  if (!mobile) return "";
+  if (mobile.length === 10) return `91${mobile}`;
+  return mobile;
+}
+
+function openProfessorWhatsAppTimetable(professorId) {
+  const professor = data.professors.find((item) => item.id === professorId);
+  const phone = professorWhatsAppNumber(professor);
+  if (!professor) return;
+  if (!phone) {
+    alert("Please enter and save this professor's WhatsApp Mobile in Professor Management first. Mobile numbers are kept out of GitHub code.");
+    return;
+  }
+  const message = professorShareMessage(professorId);
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+}
+
 function changesTTShareMessage() {
   const valid = parseChangesTTInput().filter((row) => row.ok);
   if (!valid.length) return cleanSheetText($("#changesTTInput")?.value || "");
@@ -6907,12 +7047,21 @@ function saveProfessorManagement(professorId) {
   const headPaperBox = $(`[data-professor-head-paper-nos="${CSS.escape(professorId)}"]`);
   const loginInput = $(`[data-professor-login-id="${CSS.escape(professorId)}"]`);
   const passwordInput = $(`[data-professor-password="${CSS.escape(professorId)}"]`);
+  const courseInput = $(`[data-professor-course="${CSS.escape(professorId)}"]`);
+  const locationInput = $(`[data-professor-location="${CSS.escape(professorId)}"]`);
+  const lineInput = $(`[data-professor-line="${CSS.escape(professorId)}"]`);
+  const whatsappInput = $(`[data-professor-whatsapp="${CSS.escape(professorId)}"]`);
   const selectedLevels = selectedValues(levelSelect);
   const selectedPaperNos = selectedValues(paperNoSelect).map(normalizePaperNo).filter(Boolean);
   const selectedHeadPaperNos = Array.from(headPaperBox?.querySelectorAll("input:checked") || []).map((input) => normalizePaperNo(input.value)).filter(Boolean);
   professor.name = nameInput.value.trim() || professor.name;
   professor.loginId = loginInput.value.trim() || professorLoginId(professor);
   professor.loginPassword = passwordInput.value.trim() || professorPassword(professor);
+  professor.course = cleanSheetText(courseInput?.value || professor.course || "");
+  professor.location = cleanSheetText(locationInput?.value || professor.location || "");
+  professor.line = cleanSheetText(lineInput?.value || professor.line || "");
+  professor.home = professor.location || professor.home || "Online";
+  professor.whatsappMobile = cleanMobileNumber(whatsappInput?.value || "");
   const otherProgramLevels = (professor.levels || []).filter((level) => !levelsForProgram().includes(level));
   const programLevels = selectedLevels.length ? selectedLevels : levelsForProgram();
   professor.levels = [...otherProgramLevels, ...programLevels];
@@ -6948,13 +7097,18 @@ function addProfessorFromManagement(event) {
     id: slug(name) || uid("p"),
     name,
     speciality: selectedPaperNos.length ? `Papers ${selectedPaperNos.join(", ")}` : "New professor",
-    home: "Online",
+    home: cleanSheetText(form.elements.location?.value || "Online"),
     levels,
     papers,
     headPaperNos: [],
     loginId: professorFirstNameCredential(name),
     loginPassword: professorFirstNameCredential(name),
-    color: professorPalette[data.professors.length % professorPalette.length]
+    color: professorPalette[data.professors.length % professorPalette.length],
+    course: cleanSheetText(form.elements.course?.value || ""),
+    location: cleanSheetText(form.elements.location?.value || ""),
+    line: cleanSheetText(form.elements.line?.value || ""),
+    mobileHash: "",
+    whatsappMobile: cleanMobileNumber(form.elements.whatsappMobile?.value || "")
   };
   data.professors.push(professor);
   rememberProfessorMasterBackup(professor);
@@ -7345,6 +7499,7 @@ function bindEvents() {
     const savePaperMasterId = event.target.dataset.savePaperMaster;
     const deleteProfessorId = event.target.dataset.deleteProfessor;
     const copyProfessorLoginId = event.target.dataset.copyProfessorLogin;
+    const whatsappProfessorId = event.target.dataset.whatsappProfessor;
     const professorView = event.target.dataset.professorView;
     if (professorView) {
       professorManagementView = professorView;
@@ -7369,6 +7524,10 @@ function bindEvents() {
         navigator.clipboard?.writeText(professorLoginShareMessage(professor));
         alert(`Login message copied for ${professor.name}.`);
       }
+      return;
+    }
+    if (whatsappProfessorId) {
+      openProfessorWhatsAppTimetable(whatsappProfessorId);
       return;
     }
     if (deleteTopicPlanId) {
