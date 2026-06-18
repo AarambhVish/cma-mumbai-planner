@@ -2881,6 +2881,13 @@ function setOptions(select, values, selected, includeAll = false) {
   if (selected && options.includes(selected)) select.value = selected;
 }
 
+function setBatchPickerOptions(select, values, selected) {
+  if (!select) return;
+  const options = ["Select Batch", "All", ...values];
+  select.innerHTML = options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+  select.value = selected && options.includes(selected) ? selected : "Select Batch";
+}
+
 function setMultiOptions(select, values, selected = [], includeAll = false) {
   const options = includeAll ? ["All", ...values] : values;
   const active = selected.length ? selected : includeAll ? ["All"] : [];
@@ -3214,22 +3221,22 @@ function renderTables() {
   let masterBatchLevel = $("#masterBatchLevelFilter")?.value || "All";
   let masterBatchAttempt = $("#masterBatchAttemptFilter")?.value || "All";
   let masterBatchCentre = $("#masterBatchCentreFilter")?.value || "All";
-  let masterBatchName = $("#masterBatchNameFilter")?.value || "All";
+  let masterBatchName = $("#masterBatchNameFilter")?.value || "Select Batch";
   const allMasterBatches = activeProgramBatches();
   const batchLevels = [...new Set(allMasterBatches.map((batch) => batch.level).filter(Boolean))]
     .sort((a, b) => levelOrder(a) - levelOrder(b));
   const batchAttempts = [...new Set(allMasterBatches.map((batch) => batch.attempt).filter(Boolean))].sort();
   const batchCentres = [...new Set(allMasterBatches.map((batch) => batch.centre).filter(Boolean))].sort();
   const batchNames = [...new Set(allMasterBatches.map((batch) => batch.name).filter(Boolean))].sort();
-  setOptions($("#masterBatchNameFilter"), batchNames, masterBatchName, true);
+  setBatchPickerOptions($("#masterBatchNameFilter"), batchNames, masterBatchName);
   setOptions($("#masterBatchLevelFilter"), batchLevels, masterBatchLevel, true);
   setOptions($("#masterBatchAttemptFilter"), batchAttempts, masterBatchAttempt, true);
   setOptions($("#masterBatchCentreFilter"), batchCentres, masterBatchCentre, true);
-  masterBatchName = $("#masterBatchNameFilter")?.value || "All";
+  masterBatchName = $("#masterBatchNameFilter")?.value || "Select Batch";
   masterBatchLevel = $("#masterBatchLevelFilter")?.value || "All";
   masterBatchAttempt = $("#masterBatchAttemptFilter")?.value || "All";
   masterBatchCentre = $("#masterBatchCentreFilter")?.value || "All";
-  const masterBatches = allMasterBatches.filter((batch) =>
+  const masterBatches = (masterBatchName === "Select Batch" ? [] : allMasterBatches).filter((batch) =>
     (masterBatchName === "All" || batch.name === masterBatchName) &&
     (masterBatchLevel === "All" || batch.level === masterBatchLevel) &&
     (masterBatchAttempt === "All" || batch.attempt === masterBatchAttempt) &&
@@ -3253,7 +3260,7 @@ function renderTables() {
         <button class="tiny danger" data-delete-batch="${batch.id}">Delete</button>
       </div>
     </td>
-  </tr>`).join("") || `<tr><td colspan="7" class="empty">No batches match these filters.</td></tr>`;
+  </tr>`).join("") || `<tr><td colspan="7" class="empty">${masterBatchName === "Select Batch" ? "Select a batch from the dropdown above, or choose All to see every batch." : "No batches match these filters."}</td></tr>`;
 
   renderPaperManagement();
   renderProfessorManagement();
