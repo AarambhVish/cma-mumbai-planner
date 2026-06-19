@@ -987,6 +987,7 @@ let data = loadData();
 ensureDataShape();
 let selectedWeekStart = formatDateInput(getFriday(new Date()));
 let professorManagementView = "all";
+let activeAlertType = "";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -2985,18 +2986,33 @@ function renderDashboard() {
 }
 
 function renderAlerts(metrics) {
-  const selectedTypes = selectedValues($("#alertTypeFilter"));
-  const activeTypes = selectedTypes.length ? selectedTypes : ["All"];
-  const alerts = conflictAlerts()
-    .filter((alert) => ["Faculty double-booked", "Travel buffer short"].includes(alert.title))
-    .filter((alert) => activeTypes.includes("All") || activeTypes.includes(alert.title));
-  $("#alertCount").textContent = `${alerts.length} alerts`;
+  const allAlerts = conflictAlerts()
+    .filter((alert) => ["Faculty double-booked", "Travel buffer short"].includes(alert.title));
+  const alertCounts = {
+    All: allAlerts.length,
+    "Faculty double-booked": allAlerts.filter((alert) => alert.title === "Faculty double-booked").length,
+    "Travel buffer short": allAlerts.filter((alert) => alert.title === "Travel buffer short").length
+  };
+  $("#alertCount").textContent = `${allAlerts.length} alerts`;
+  $("#alertSummaryBoxes").innerHTML = alertFilterOptions.map((option) => `
+    <button class="alert-count-box ${activeAlertType === option.value ? "active" : ""}" data-alert-box="${escapeHtml(option.value)}" type="button">
+      <span>${escapeHtml(option.label)}</span>
+      <strong>${alertCounts[option.value] || 0}</strong>
+    </button>
+  `).join("");
+  if (!activeAlertType) {
+    $("#alerts").innerHTML = "";
+    $("#alerts").classList.add("collapsed");
+    return;
+  }
+  const alerts = allAlerts.filter((alert) => activeAlertType === "All" || alert.title === activeAlertType);
+  $("#alerts").classList.remove("collapsed");
   $("#alerts").innerHTML = alerts.length ? alerts.map((alert) => `
     <div class="alert ${alert.tone}">
       <strong>${escapeHtml(alert.title)}</strong>
       <span>${escapeHtml(alert.body)}</span>
     </div>
-  `).join("") : `<div class="empty">No timetable or syllabus risk alerts right now.</div>`;
+  `).join("") : `<div class="empty">No ${activeAlertType === "All" ? "" : activeAlertType} alerts right now.</div>`;
 }
 
 function minutes(time) {
@@ -7335,7 +7351,13 @@ function bindEvents() {
   $("#professorHeadSyllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
   $("#syllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
   $("#professorHeadSyllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
-  $("#alertTypeFilter").addEventListener("change", () => renderAlerts([]));
+  $("#alertTypeFilter")?.addEventListener("change", () => renderAlerts([]));
+  $("#alertSummaryBoxes")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-alert-box]");
+    if (!button) return;
+    activeAlertType = activeAlertType === button.dataset.alertBox ? "" : button.dataset.alertBox;
+    renderAlerts([]);
+  });
   if ($("#slotForm")) $("#slotForm").addEventListener("submit", addSlot);
   $("#dailyDateFilter").addEventListener("change", renderDailyTimetable);
   $("#dailyLevelFilter").addEventListener("change", renderDailyTimetable);

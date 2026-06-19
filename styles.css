@@ -1740,12 +1740,47 @@ tr:last-child td {
   padding: 14px;
 }
 
-#dashboardView .panel-head label {
-  min-width: 260px;
+.alert-list.collapsed {
+  display: none;
 }
 
-#dashboardView #alertTypeFilter {
-  min-height: 92px;
+.alert-box-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.alert-count-box {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid #c9dbe6;
+  border-radius: 8px;
+  background: #f8fbfd;
+  color: #0d2630;
+  text-align: left;
+  box-shadow: none;
+}
+
+.alert-count-box:hover,
+.alert-count-box.active {
+  border-color: var(--brand);
+  background: #e9f8fb;
+}
+
+.alert-count-box span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.alert-count-box strong {
+  color: #0d2630;
+  font-size: 24px;
+  line-height: 1;
 }
 
 .alert {
