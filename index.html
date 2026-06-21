@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260621-time-slot-planner">
+    <link rel="stylesheet" href="styles.css?v=20260622-time-slot-gaps-only">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -265,13 +265,17 @@
             </div>
             <div class="row-actions">
               <label class="file-trigger">
-                Import Room Excel
-                <input id="roomExcelInput" type="file" accept=".xlsx,.xls">
+                Import Room Excel(s)
+                <input id="roomExcelInput" type="file" accept=".xlsx,.xls" multiple>
               </label>
             </div>
           </div>
           <div class="time-slot-summary" id="timeSlotSummary"></div>
           <div class="time-slot-filters">
+            <label>
+              Location
+              <select id="timeSlotCentreFilter"></select>
+            </label>
             <label>
               Room
               <select id="timeSlotRoomFilter"></select>
@@ -286,11 +290,7 @@
             </label>
             <label>
               Min Free Hrs
-              <input id="timeSlotMinHours" type="number" min="0.5" step="0.5" value="1">
-            </label>
-            <label>
-              Course / Batch Search
-              <input id="timeSlotCourseFilter" placeholder="e.g. CMA, CAF, Final">
+              <input id="timeSlotMinHours" type="number" min="2.5" step="0.5" value="2.5">
             </label>
           </div>
           <div class="table-wrap">
@@ -298,26 +298,11 @@
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Room</th>
-                  <th>Available Time</th>
+                  <th>Available Gap</th>
                   <th>Free Hrs</th>
-                  <th>Before / After Booking</th>
                 </tr>
               </thead>
               <tbody id="timeSlotAvailableTable"></tbody>
-            </table>
-          </div>
-          <div class="table-wrap compact-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Room</th>
-                  <th>Booked Time</th>
-                  <th>Course Details</th>
-                </tr>
-              </thead>
-              <tbody id="timeSlotBookedTable"></tbody>
             </table>
           </div>
         </section>
@@ -939,6 +924,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260621-time-slot-planner"></script>
+    <script src="app.js?v=20260622-time-slot-gaps-only"></script>
   </body>
 </html>

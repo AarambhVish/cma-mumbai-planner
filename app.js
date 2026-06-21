@@ -3029,7 +3029,15 @@ function renderAlerts(metrics) {
 function renderTimeSlotPlanner() {
   if (!$("#timeSlotAvailableTable")) return;
   const bookings = data.roomBookings || [];
-  const rooms = [...new Set(bookings.map((booking) => booking.room).filter(Boolean))].sort();
+  const centres = [...new Set(bookings.map((booking) => booking.centre).filter(Boolean))].sort();
+  const centreSelect = $("#timeSlotCentreFilter");
+  const selectedCentre = centreSelect?.value || "All";
+  setOptions(centreSelect, centres, selectedCentre, true);
+  const activeCentre = centreSelect?.value || "All";
+  const rooms = [...new Set(bookings
+    .filter((booking) => activeCentre === "All" || booking.centre === activeCentre)
+    .map((booking) => booking.room)
+    .filter(Boolean))].sort();
   const dates = [...new Set(bookings.map((booking) => booking.date).filter(Boolean))].sort();
   const roomSelect = $("#timeSlotRoomFilter");
   const selectedRoom = roomSelect?.value || "All";
@@ -3039,42 +3047,26 @@ function renderTimeSlotPlanner() {
   if (fromInput && !fromInput.value && dates.length) fromInput.value = dates[0];
   if (toInput && !toInput.value && dates.length) toInput.value = dates[dates.length - 1];
   const filters = {
+    centre: centreSelect?.value || "All",
     room: roomSelect?.value || "All",
     from: fromInput?.value || "",
     to: toInput?.value || "",
-    minHours: $("#timeSlotMinHours")?.value || "1"
+    minHours: $("#timeSlotMinHours")?.value || "2.5"
   };
-  const courseQuery = cleanSheetText($("#timeSlotCourseFilter")?.value || "");
   const freeSlots = availableRoomSlots(bookings, filters);
-  const bookedRows = bookings
-    .filter((booking) => (!filters.from || booking.date >= filters.from) && (!filters.to || booking.date <= filters.to))
-    .filter((booking) => filters.room === "All" || booking.room === filters.room)
-    .filter((booking) => roomBookingMatchesCourse(booking, courseQuery))
-    .sort((a, b) => `${a.date} ${a.start} ${a.room}`.localeCompare(`${b.date} ${b.start} ${b.room}`));
-  const cmaBooked = bookings.filter((booking) => /CMA|CMAF|CMAI|CAF|Final CA/i.test(roomBookingCourseText(booking))).length;
   $("#timeSlotSummary").innerHTML = [
-    ["Imported Bookings", bookings.length],
+    ["Locations", centres.length],
     ["Rooms", rooms.length],
-    ["Free Slots", freeSlots.length],
-    ["CMA / CA Course Blocks", cmaBooked]
+    ["Available Gaps", freeSlots.length],
+    ["Minimum Gap", `${Number(filters.minHours || 2.5).toFixed(1)} hrs`]
   ].map(([label, value]) => `<div class="time-slot-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
   $("#timeSlotAvailableTable").innerHTML = freeSlots.length ? freeSlots.map((slot) => `
     <tr>
       <td>${escapeHtml(dayLabel(slot.date))}<br><span class="muted">${escapeHtml(slot.date)}</span></td>
-      <td><strong>${escapeHtml(slot.room)}</strong></td>
-      <td>${escapeHtml(formatTimeRange(slot.start, slot.end))}</td>
+      <td><strong>${escapeHtml(slot.centre)} - ${escapeHtml(slot.room)}</strong> is free from <strong>${escapeHtml(formatTimeShort(slot.start))}</strong> to <strong>${escapeHtml(formatTimeShort(slot.end))}</strong>.</td>
       <td>${slot.hours.toFixed(1)}</td>
-      <td>${escapeHtml(slot.context)}</td>
     </tr>
-  `).join("") : `<tr><td colspan="5" class="empty">${bookings.length ? "No free slots match these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
-  $("#timeSlotBookedTable").innerHTML = bookedRows.length ? bookedRows.slice(0, 200).map((booking) => `
-    <tr>
-      <td>${escapeHtml(dayLabel(booking.date))}<br><span class="muted">${escapeHtml(booking.date)}</span></td>
-      <td>${escapeHtml(booking.room)}</td>
-      <td>${escapeHtml(formatTimeRange(booking.start, booking.end))}</td>
-      <td>${escapeHtml(booking.details || "-")}</td>
-    </tr>
-  `).join("") : `<tr><td colspan="4" class="empty">${bookings.length ? "No booked rows match the course search." : "No room booking data imported yet."}</td></tr>`;
+  `).join("") : `<tr><td colspan="3" class="empty">${bookings.length ? "No continuous gap of at least 2.5 hours found between 7am and 9pm for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
 }
 
 function minutes(time) {
@@ -5720,17 +5712,29 @@ function loadXlsxLibrary() {
   });
 }
 
+function centreFromRoomRows(rows, sourceName = "") {
+  const rowText = (rows[1] || rows[0] || []).map(cleanSheetText).find((value) => value && !/J\.?K\.?SHAH/i.test(value));
+  if (rowText) return rowText;
+  const fileText = cleanSheetText(sourceName).replace(/\.(xlsx|xls)$/i, "");
+  return titleFromCode(fileText) || "Location";
+}
+
 function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
   const dateRow = rows[2] || [];
   const dateCols = dateRow
     .map((value, index) => ({ index, date: parseSheetDate(value) }))
     .filter((item) => item.date);
   const bookings = [];
+  const centre = centreFromRoomRows(rows, sourceName);
   let currentRoom = "";
+  const roomNames = new Set();
 
   rows.forEach((row, rowIndex) => {
     const first = cleanSheetText(row[0]);
-    if (isRoomName(first)) currentRoom = first;
+    if (isRoomName(first)) {
+      currentRoom = first;
+      roomNames.add(currentRoom);
+    }
     if (!currentRoom) return;
     dateCols.forEach(({ index, date }) => {
       const range = parseRoomTimeRange(row[index]);
@@ -5746,7 +5750,7 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
       bookings.push({
         id: uid("room"),
         source: sourceName,
-        centre: "Ghatkopar",
+        centre,
         room: currentRoom,
         date,
         start: range.start,
@@ -5754,6 +5758,25 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
         details: [...new Set(detailLines)].join(" | ") || "Room Blocking",
         importedAt: new Date().toISOString()
       });
+    });
+  });
+  roomNames.forEach((room) => {
+    dateCols.forEach(({ date }) => {
+      const hasAnyBooking = bookings.some((booking) => booking.room === room && booking.date === date);
+      if (!hasAnyBooking) {
+        bookings.push({
+          id: uid("roomday"),
+          source: sourceName,
+          centre,
+          room,
+          date,
+          start: "07:00",
+          end: "07:00",
+          details: "",
+          openMarker: true,
+          importedAt: new Date().toISOString()
+        });
+      }
     });
   });
   return bookings;
@@ -5783,49 +5806,59 @@ function adjacentBookingLabel(bookings, date, room, start, end) {
 function availableRoomSlots(bookings, filters = {}) {
   const from = filters.from || "";
   const to = filters.to || "";
+  const centre = filters.centre || "All";
   const room = filters.room || "All";
-  const minHours = Number(filters.minHours || 1);
+  const minHours = Number(filters.minHours || 2.5);
   const groups = new Map();
   bookings.forEach((booking) => {
     if (from && booking.date < from) return;
     if (to && booking.date > to) return;
+    if (centre !== "All" && booking.centre !== centre) return;
     if (room !== "All" && booking.room !== room) return;
-    const key = `${booking.date}|${booking.room}`;
+    const key = `${booking.date}|${booking.centre}|${booking.room}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(booking);
   });
   const results = [];
   groups.forEach((items, key) => {
-    const [date, roomName] = key.split("|");
+    const [date, centreName, roomName] = key.split("|");
     const ordered = items.sort((a, b) => minutes(a.start) - minutes(b.start));
     let cursor = "07:00";
     ordered.forEach((booking) => {
       if (minutes(booking.start) > minutes(cursor)) {
         const hrs = hoursBetween(cursor, booking.start);
-        if (hrs >= minHours) results.push({ date, room: roomName, start: cursor, end: booking.start, hours: hrs, context: adjacentBookingLabel(ordered, date, roomName, cursor, booking.start) });
+        if (hrs >= minHours) results.push({ date, centre: centreName, room: roomName, start: cursor, end: booking.start, hours: hrs });
       }
       if (minutes(booking.end) > minutes(cursor)) cursor = booking.end;
     });
     if (minutes(cursor) < minutes("21:00")) {
       const hrs = hoursBetween(cursor, "21:00");
-      if (hrs >= minHours) results.push({ date, room: roomName, start: cursor, end: "21:00", hours: hrs, context: adjacentBookingLabel(ordered, date, roomName, cursor, "21:00") });
+      if (hrs >= minHours) results.push({ date, centre: centreName, room: roomName, start: cursor, end: "21:00", hours: hrs });
     }
   });
-  return results.sort((a, b) => `${a.date} ${a.start} ${a.room}`.localeCompare(`${b.date} ${b.start} ${b.room}`));
+  return results.sort((a, b) => `${a.date} ${a.start} ${a.centre} ${a.room}`.localeCompare(`${b.date} ${b.start} ${b.centre} ${b.room}`));
 }
 
 async function importRoomExcel(event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
   try {
     const XLSX = await loadXlsxLibrary();
-    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
-    const firstSheet = workbook.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { header: 1, raw: false, defval: "" });
-    data.roomBookings = parseRoomBookingsFromRows(rows, file.name);
+    const imported = [];
+    for (const file of files) {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
+      const firstSheet = workbook.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { header: 1, raw: false, defval: "" });
+      imported.push(...parseRoomBookingsFromRows(rows, file.name));
+    }
+    const importedSources = new Set(imported.map((booking) => booking.source));
+    data.roomBookings = [
+      ...(data.roomBookings || []).filter((booking) => !importedSources.has(booking.source)),
+      ...imported
+    ];
     saveData();
     renderTimeSlotPlanner();
-    alert(`Imported ${data.roomBookings.length} room booking blocks from ${file.name}.`);
+    alert(`Imported ${imported.filter((booking) => !booking.openMarker).length} room booking blocks from ${files.length} Excel file${files.length === 1 ? "" : "s"}.`);
   } catch (error) {
     alert(`Room Excel import failed: ${error.message}`);
   } finally {
@@ -7559,7 +7592,7 @@ function bindEvents() {
     renderAlerts([]);
   });
   $("#roomExcelInput")?.addEventListener("change", importRoomExcel);
-  ["timeSlotRoomFilter", "timeSlotFrom", "timeSlotTo", "timeSlotMinHours", "timeSlotCourseFilter"].forEach((id) => {
+  ["timeSlotCentreFilter", "timeSlotRoomFilter", "timeSlotFrom", "timeSlotTo", "timeSlotMinHours"].forEach((id) => {
     $(`#${id}`)?.addEventListener("input", renderTimeSlotPlanner);
     $(`#${id}`)?.addEventListener("change", renderTimeSlotPlanner);
   });
