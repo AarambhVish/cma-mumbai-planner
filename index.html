@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260619-master-batch-dropdown-v2">
+    <link rel="stylesheet" href="styles.css?v=20260621-time-slot-planner">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -93,6 +93,7 @@
         <button class="tab" data-view="goTo">Go To</button>
         <button class="tab active" data-view="dashboard">Dashboard</button>
         <button class="tab" data-view="weekly">Weekly Table</button>
+        <button class="tab" data-view="timeSlot">Time Slot</button>
         <button class="tab" data-view="changesTT">Changes TT</button>
         <button class="tab" data-view="planner">Timetable</button>
         <button class="tab" data-view="professorPlanning">Professor Planning</button>
@@ -250,6 +251,73 @@
             <table class="weekly-table">
               <thead id="weeklyHead"></thead>
               <tbody id="weeklyTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="timeSlotView">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Time Slot Availability</h2>
+              <span>Import room Excel and find available slots before planning CMA lectures.</span>
+            </div>
+            <div class="row-actions">
+              <label class="file-trigger">
+                Import Room Excel
+                <input id="roomExcelInput" type="file" accept=".xlsx,.xls">
+              </label>
+            </div>
+          </div>
+          <div class="time-slot-summary" id="timeSlotSummary"></div>
+          <div class="time-slot-filters">
+            <label>
+              Room
+              <select id="timeSlotRoomFilter"></select>
+            </label>
+            <label>
+              From
+              <input id="timeSlotFrom" type="date">
+            </label>
+            <label>
+              To
+              <input id="timeSlotTo" type="date">
+            </label>
+            <label>
+              Min Free Hrs
+              <input id="timeSlotMinHours" type="number" min="0.5" step="0.5" value="1">
+            </label>
+            <label>
+              Course / Batch Search
+              <input id="timeSlotCourseFilter" placeholder="e.g. CMA, CAF, Final">
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Room</th>
+                  <th>Available Time</th>
+                  <th>Free Hrs</th>
+                  <th>Before / After Booking</th>
+                </tr>
+              </thead>
+              <tbody id="timeSlotAvailableTable"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap compact-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Room</th>
+                  <th>Booked Time</th>
+                  <th>Course Details</th>
+                </tr>
+              </thead>
+              <tbody id="timeSlotBookedTable"></tbody>
             </table>
           </div>
         </section>
@@ -871,6 +939,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260619-master-batch-dropdown-v2"></script>
+    <script src="app.js?v=20260621-time-slot-planner"></script>
   </body>
 </html>
