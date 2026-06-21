@@ -5425,10 +5425,9 @@ function renderWeeklyTable() {
   $("#weeklyTable").innerHTML = dates.flatMap((date) => {
     const visibleTimeSlots = boardTimeSlotsForDate(date, activeTimeSlots);
     return visibleTimeSlots.map((timeSlot, slotIndex) => {
-      const dateCell = `<td class="weekly-date-col">
-        <button class="date-delete-x" data-delete-time-slot-date="${escapeHtml(date)}" data-delete-time-slot-start="${escapeHtml(timeSlot.start)}" data-delete-time-slot-end="${escapeHtml(timeSlot.end)}" type="button" title="Delete this time slot">Ã—</button>
+      const dateCell = slotIndex === 0 ? `<td class="weekly-date-col weekly-date-merged" rowspan="${visibleTimeSlots.length}">
         <strong>${escapeHtml(dayLabel(date))}</strong>
-      </td>`;
+      </td>` : "";
       const cells = visibleBatches.map((batch) => {
         const slot = slotsForBoardCell(batch.id, date, timeSlot);
         const professorId = slotProfessorId(slot || { batchId: batch.id, professorId: "" });
@@ -5459,6 +5458,7 @@ function renderWeeklyTable() {
       return `<tr class="${slotIndex === 0 ? "date-start-row" : ""}">
         ${dateCell}
         <td class="weekly-time-col">
+          <button class="date-delete-x time-slot-delete-x" data-delete-time-slot-date="${escapeHtml(date)}" data-delete-time-slot-start="${escapeHtml(timeSlot.start)}" data-delete-time-slot-end="${escapeHtml(timeSlot.end)}" type="button" title="Delete this time slot">×</button>
           <div class="weekly-time-row">
             <strong>${hoursBetween(timeSlot.start, timeSlot.end).toFixed(2)}</strong>
             <div class="time-editor">

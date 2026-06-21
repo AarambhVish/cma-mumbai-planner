@@ -1159,6 +1159,10 @@ table {
   line-height: 1.2;
 }
 
+.weekly-table tbody .weekly-date-merged strong {
+  padding: 0 4px;
+}
+
 .date-delete-x {
   position: absolute;
   left: 4px;
@@ -1181,6 +1185,10 @@ table {
 .date-delete-x:hover {
   background: #fecaca;
   border-color: #ef4444;
+}
+
+.time-slot-delete-x {
+  left: 3px;
 }
 
 .weekly-table th:last-child,
@@ -1347,6 +1355,20 @@ table {
   min-height: 42px;
   padding: 0 3px;
   white-space: nowrap;
+}
+
+.weekly-time-col .weekly-time-row {
+  grid-template-columns: 24px 90px;
+  padding-left: 22px;
+}
+
+.weekly-time-col .time-editor {
+  grid-template-columns: 43px 43px;
+}
+
+.weekly-time-col .time-part {
+  width: 43px;
+  min-width: 43px;
 }
 
 .scope-chip {
