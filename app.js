@@ -3071,15 +3071,20 @@ function renderTimeSlotPlanner() {
       <th>Total Free Hrs</th>
     </tr>
   `;
-  $("#timeSlotAvailableTable").innerHTML = matrixRows.length ? matrixRows.map((row) => `
-    <tr>
-      <td>${escapeHtml(dayLabel(row.date))}<br><span class="muted">${escapeHtml(row.date)}</span></td>
+  const rowsByDate = matrixRows.reduce((groups, row) => {
+    if (!groups.has(row.date)) groups.set(row.date, []);
+    groups.get(row.date).push(row);
+    return groups;
+  }, new Map());
+  $("#timeSlotAvailableTable").innerHTML = matrixRows.length ? [...rowsByDate.entries()].map(([date, rows]) => rows.map((row, index) => `
+    <tr class="${index === 0 ? "time-slot-date-start" : ""}">
+      ${index === 0 ? `<td class="time-slot-date-block" rowspan="${rows.length}"><strong>${escapeHtml(dayLabel(date))}</strong><br><span class="muted">${escapeHtml(date)}</span></td>` : ""}
       <td><strong>${escapeHtml(row.centre)}</strong></td>
       <td>${escapeHtml(row.room)}</td>
       ${hourColumns.map((hour) => timelineCellHtml(row, hour)).join("")}
       <td><strong>${row.hours.toFixed(1)}</strong></td>
     </tr>
-  `).join("") : `<tr><td colspan="${hourColumns.length + 4}" class="empty">${bookings.length ? "No continuous gap of at least 3 hours found between 7am and 9pm for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
+  `).join("")).join("") : `<tr><td colspan="${hourColumns.length + 4}" class="empty">${bookings.length ? "No continuous gap of at least 3 hours found between 7am and 9pm for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
 }
 
 function minutes(time) {
@@ -5909,7 +5914,28 @@ function timelineCellHtml(row, hour) {
   if (!slot) return `<td class="timeline-cell"></td>`;
   const startsHere = freeSlotStartsInHour(slot, hour) || minutes(slot.start) < hour * 60;
   const label = startsHere ? `${formatTimeShort(slot.start)}-${formatTimeShort(slot.end)}` : "";
-  return `<td class="timeline-cell free" title="${escapeHtml(`${row.room} free ${formatTimeRange(slot.start, slot.end)} (${slot.hours.toFixed(1)} hrs)`)}">${escapeHtml(label)}</td>`;
+  return `<td class="timeline-cell free" tabindex="0" role="button" data-time-slot-gap="1" data-gap-date="${escapeHtml(row.date)}" data-gap-start="${escapeHtml(slot.start)}" data-gap-end="${escapeHtml(slot.end)}" data-gap-centre="${escapeHtml(row.centre)}" data-gap-room="${escapeHtml(row.room)}" title="${escapeHtml(`${row.room} free ${formatTimeRange(slot.start, slot.end)} (${slot.hours.toFixed(1)} hrs). Click to use in Weekly Timetable.`)}">${escapeHtml(label)}</td>`;
+}
+
+function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "") {
+  if (!date || !start || !end) return;
+  const targetWeek = formatDateInput(getFriday(new Date(`${date}T00:00:00`)));
+  const currentSlots = timeSlotsForDate(date);
+  const exists = currentSlots.some((slot) => slot.start === start && slot.end === end);
+  if (!exists) {
+    setTimeSlotsForDate(date, [...currentSlots, { start, end }]);
+    saveData({ skipRender: true });
+  }
+  selectedWeekStart = targetWeek;
+  if ($("#weekStart")) $("#weekStart").value = selectedWeekStart;
+  resetWeeklySlotControlDates();
+  setActiveView("weekly");
+  renderFilters();
+  renderWeeklyTable();
+  renderSharePanels();
+  setTimeout(() => scrollToNavigationTarget("#weeklyView .panel"), 40);
+  const place = [centre, room].filter(Boolean).join(" - ");
+  alert(`${exists ? "Time slot already exists" : "Time slot added"} in Weekly Timetable for ${dayLabel(date)} ${formatTimeRange(start, end)}${place ? ` (${place})` : ""}.`);
 }
 
 async function importRoomExcel(event) {
@@ -7876,6 +7902,18 @@ function bindEvents() {
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeProfessorWeeklyPreview();
+  });
+  $("#timeSlotAvailableTable")?.addEventListener("click", (event) => {
+    const cell = event.target.closest("[data-time-slot-gap]");
+    if (!cell) return;
+    useAvailableGapForWeeklyTable(cell.dataset.gapDate, cell.dataset.gapStart, cell.dataset.gapEnd, cell.dataset.gapCentre, cell.dataset.gapRoom);
+  });
+  $("#timeSlotAvailableTable")?.addEventListener("keydown", (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    const cell = event.target.closest("[data-time-slot-gap]");
+    if (!cell) return;
+    event.preventDefault();
+    useAvailableGapForWeeklyTable(cell.dataset.gapDate, cell.dataset.gapStart, cell.dataset.gapEnd, cell.dataset.gapCentre, cell.dataset.gapRoom);
   });
 
   document.addEventListener("click", (event) => {
