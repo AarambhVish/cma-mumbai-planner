@@ -3054,19 +3054,24 @@ function renderTimeSlotPlanner() {
     minHours: $("#timeSlotMinHours")?.value || "2.5"
   };
   const freeSlots = availableRoomSlots(bookings, filters);
+  const matrixRows = timeSlotMatrixRows(freeSlots);
   $("#timeSlotSummary").innerHTML = [
     ["Locations", centres.length],
     ["Rooms", rooms.length],
-    ["Available Gaps", freeSlots.length],
+    ["Available Rows", matrixRows.length],
     ["Minimum Gap", `${Number(filters.minHours || 2.5).toFixed(1)} hrs`]
   ].map(([label, value]) => `<div class="time-slot-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
-  $("#timeSlotAvailableTable").innerHTML = freeSlots.length ? freeSlots.map((slot) => `
+  $("#timeSlotAvailableTable").innerHTML = matrixRows.length ? matrixRows.map((row) => `
     <tr>
-      <td>${escapeHtml(dayLabel(slot.date))}<br><span class="muted">${escapeHtml(slot.date)}</span></td>
-      <td><strong>${escapeHtml(slot.centre)} - ${escapeHtml(slot.room)}</strong> is free from <strong>${escapeHtml(formatTimeShort(slot.start))}</strong> to <strong>${escapeHtml(formatTimeShort(slot.end))}</strong>.</td>
-      <td>${slot.hours.toFixed(1)}</td>
+      <td>${escapeHtml(dayLabel(row.date))}<br><span class="muted">${escapeHtml(row.date)}</span></td>
+      <td><strong>${escapeHtml(row.centre)}</strong></td>
+      <td>${escapeHtml(row.room)}</td>
+      <td>${row.morning.length ? row.morning.map(freeSlotChip).join("") : `<span class="muted">-</span>`}</td>
+      <td>${row.afternoon.length ? row.afternoon.map(freeSlotChip).join("") : `<span class="muted">-</span>`}</td>
+      <td>${row.evening.length ? row.evening.map(freeSlotChip).join("") : `<span class="muted">-</span>`}</td>
+      <td><strong>${row.hours.toFixed(1)}</strong></td>
     </tr>
-  `).join("") : `<tr><td colspan="3" class="empty">${bookings.length ? "No continuous gap of at least 2.5 hours found between 7am and 9pm for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
+  `).join("") : `<tr><td colspan="7" class="empty">${bookings.length ? "No continuous gap of at least 2.5 hours found between 7am and 9pm for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
 }
 
 function minutes(time) {
@@ -5837,6 +5842,39 @@ function availableRoomSlots(bookings, filters = {}) {
     }
   });
   return results.sort((a, b) => `${a.date} ${a.start} ${a.centre} ${a.room}`.localeCompare(`${b.date} ${b.start} ${b.centre} ${b.room}`));
+}
+
+function freeSlotPeriod(slot) {
+  const midpoint = (minutes(slot.start) + minutes(slot.end)) / 2;
+  if (midpoint < minutes("12:00")) return "morning";
+  if (midpoint < minutes("17:00")) return "afternoon";
+  return "evening";
+}
+
+function freeSlotChip(slot) {
+  return `<span class="gap-chip">${escapeHtml(formatTimeShort(slot.start))} - ${escapeHtml(formatTimeShort(slot.end))}</span>`;
+}
+
+function timeSlotMatrixRows(freeSlots) {
+  const rows = new Map();
+  freeSlots.forEach((slot) => {
+    const key = `${slot.date}|${slot.centre}|${slot.room}`;
+    if (!rows.has(key)) {
+      rows.set(key, {
+        date: slot.date,
+        centre: slot.centre,
+        room: slot.room,
+        morning: [],
+        afternoon: [],
+        evening: [],
+        hours: 0
+      });
+    }
+    const row = rows.get(key);
+    row[freeSlotPeriod(slot)].push(slot);
+    row.hours += slot.hours;
+  });
+  return [...rows.values()].sort((a, b) => `${a.date} ${a.centre} ${a.room}`.localeCompare(`${b.date} ${b.centre} ${b.room}`));
 }
 
 async function importRoomExcel(event) {

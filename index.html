@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260622-time-slot-gaps-only">
+    <link rel="stylesheet" href="styles.css?v=20260622-time-slot-gap-matrix">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -298,7 +298,11 @@
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Available Gap</th>
+                  <th>Location</th>
+                  <th>Room</th>
+                  <th>Morning<br>7am-12pm</th>
+                  <th>Afternoon<br>12pm-5pm</th>
+                  <th>Evening<br>5pm-9pm</th>
                   <th>Free Hrs</th>
                 </tr>
               </thead>
@@ -924,6 +928,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260622-time-slot-gaps-only"></script>
+    <script src="app.js?v=20260622-time-slot-gap-matrix"></script>
   </body>
 </html>

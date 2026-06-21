@@ -1836,6 +1836,21 @@ tr:last-child td {
   padding: 0 14px 14px;
 }
 
+.gap-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin: 2px 4px 2px 0;
+  padding: 3px 8px;
+  border: 1px solid #b9d9d0;
+  border-radius: 999px;
+  background: #ebfbf5;
+  color: #0b5f4c;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .compact-table-wrap {
   margin-top: 12px;
   max-height: 360px;
