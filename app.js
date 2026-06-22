@@ -5920,39 +5920,82 @@ function timelineCellHtml(row, hour) {
     slotStart >= hourStart && slotStart < hourEnd ? "free-start" : "",
     slotEnd > hourStart && slotEnd <= hourEnd ? "free-end" : ""
   ].filter(Boolean).join(" ");
-  return `<td class="timeline-cell free ${edgeClass}" tabindex="0" role="button" data-time-slot-gap="1" data-gap-date="${escapeHtml(row.date)}" data-gap-start="${escapeHtml(slot.start)}" data-gap-end="${escapeHtml(slot.end)}" data-gap-centre="${escapeHtml(row.centre)}" data-gap-room="${escapeHtml(row.room)}" title="${escapeHtml(`${row.room} free ${formatTimeRange(slot.start, slot.end)} (${slot.hours.toFixed(1)} hrs). Click to use in Weekly Timetable.`)}"></td>`;
+  return `<td class="timeline-cell free ${edgeClass}" tabindex="0" role="button" data-time-slot-gap="1" data-gap-date="${escapeHtml(row.date)}" data-gap-start="${escapeHtml(slot.start)}" data-gap-end="${escapeHtml(slot.end)}" data-gap-click-time="${String(hour).padStart(2, "0")}:00" data-gap-centre="${escapeHtml(row.centre)}" data-gap-room="${escapeHtml(row.room)}" title="${escapeHtml(`${row.room} free ${formatTimeRange(slot.start, slot.end)} (${slot.hours.toFixed(1)} hrs). Click to use in Weekly Timetable.`)}"></td>`;
 }
 
-function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "") {
+function nearbyTimetableSlotOptions(date, clickedTime) {
+  const clickedMinutes = minutes(clickedTime);
+  const from = clickedMinutes - 30;
+  const to = clickedMinutes + 30;
+  const ranges = new Map();
+  timeSlotsForDate(date).forEach((slot) => {
+    if (minutes(slot.start) >= from && minutes(slot.start) <= to) ranges.set(`${slot.start}|${slot.end}`, { ...slot, batches: [] });
+  });
+  data.slots
+    .filter((slot) => slot.date === date && minutes(slot.start) >= from && minutes(slot.start) <= to)
+    .forEach((slot) => {
+      const key = `${slot.start}|${slot.end}`;
+      if (!ranges.has(key)) ranges.set(key, { start: slot.start, end: slot.end, batches: [] });
+      const batch = batchById(slot.batchId);
+      const professor = data.professors.find((item) => item.id === slotProfessorId(slot))?.name || "";
+      const subject = slotSubject(slot) || "";
+      ranges.get(key).batches.push([batch?.name, professor, subject].filter(Boolean).join(" | "));
+    });
+  return [...ranges.values()].sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+}
+
+function chooseAvailableGapSlot(date, start, end, clickedTime, centre = "", room = "") {
+  const place = [centre, room].filter(Boolean).join(" - ");
+  const promptLabel = `${dayLabel(date)}${place ? ` (${place})` : ""}`;
+  const defaultStart = minutes(clickedTime) > minutes(start) ? clickedTime : start;
+  const nearby = nearbyTimetableSlotOptions(date, defaultStart);
+  if (nearby.length) {
+    const choices = nearby.map((slot, index) => {
+      const batches = slot.batches.length ? ` - ${slot.batches.slice(0, 3).join("; ")}` : "";
+      return `${index + 1}. ${formatTimeRange(slot.start, slot.end)}${batches}`;
+    }).join("\n");
+    const answer = prompt(`Nearby timetable slots around ${formatTimeShort(defaultStart)}:\n${choices}\n\nType option number, or type your own Time In:`, "1");
+    if (answer === null) return null;
+    const selectedIndex = Number(answer.trim());
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= nearby.length) {
+      return { start: nearby[selectedIndex - 1].start, end: nearby[selectedIndex - 1].end };
+    }
+    const customStart = parseTimePart(answer);
+    if (!customStart) {
+      alert("Please choose a valid option number or enter Time In, e.g. 2pm.");
+      return null;
+    }
+    const customEndInput = prompt(`Available slot: ${promptLabel}\n\nEnter Time Out:`, formatTimeShort(end));
+    if (customEndInput === null) return null;
+    return { start: customStart, end: parseTimePart(customEndInput) };
+  }
+  const timeIn = prompt(`Available slot: ${promptLabel}\n\nEnter Time In:`, formatTimeShort(defaultStart));
+  if (timeIn === null) return null;
+  const timeOut = prompt(`Available slot: ${promptLabel}\n\nEnter Time Out:`, formatTimeShort(end));
+  if (timeOut === null) return null;
+  return { start: parseTimePart(timeIn), end: parseTimePart(timeOut) };
+}
+
+function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "", clickedTime = "") {
   if (!date || !start || !end) return;
   const targetWeek = formatDateInput(getFriday(new Date(`${date}T00:00:00`)));
   const currentSlots = timeSlotsForDate(date);
-  const exists = currentSlots.some((slot) => slot.start === start && slot.end === end);
-  let slotAlreadyExists = exists;
-  let selectedStart = start;
-  let selectedEnd = end;
-  if (!exists) {
-    const place = [centre, room].filter(Boolean).join(" - ");
-    const promptLabel = `${dayLabel(date)}${place ? ` (${place})` : ""}`;
-    const timeIn = prompt(`Available slot: ${promptLabel}\n\nEnter Time In:`, formatTimeShort(start));
-    if (timeIn === null) return;
-    const timeOut = prompt(`Available slot: ${promptLabel}\n\nEnter Time Out:`, formatTimeShort(end));
-    if (timeOut === null) return;
-    selectedStart = parseTimePart(timeIn);
-    selectedEnd = parseTimePart(timeOut);
-    if (!selectedStart || !selectedEnd || hoursBetween(selectedStart, selectedEnd) <= 0) {
-      alert("Please enter valid Time In and Time Out, e.g. 7am and 10am.");
-      return;
-    }
-    if (minutes(selectedStart) < minutes(start) || minutes(selectedEnd) > minutes(end)) {
-      alert(`Please keep the time between available slot ${formatTimeRange(start, end)}.`);
-      return;
-    }
-    slotAlreadyExists = currentSlots.some((slot) => slot.start === selectedStart && slot.end === selectedEnd);
-    if (!slotAlreadyExists) {
-      setTimeSlotsForDate(date, [...currentSlots, { start: selectedStart, end: selectedEnd }]);
-      saveData({ skipRender: true });
-    }
+  const selectedSlot = chooseAvailableGapSlot(date, start, end, clickedTime || start, centre, room);
+  if (!selectedSlot) return;
+  const selectedStart = selectedSlot.start;
+  const selectedEnd = selectedSlot.end;
+  if (!selectedStart || !selectedEnd || hoursBetween(selectedStart, selectedEnd) <= 0) {
+    alert("Please enter valid Time In and Time Out, e.g. 7am and 10am.");
+    return;
+  }
+  if (minutes(selectedStart) < minutes(start) || minutes(selectedEnd) > minutes(end)) {
+    alert(`Please keep the time between available slot ${formatTimeRange(start, end)}.`);
+    return;
+  }
+  const slotAlreadyExists = currentSlots.some((slot) => slot.start === selectedStart && slot.end === selectedEnd);
+  if (!slotAlreadyExists) {
+    setTimeSlotsForDate(date, [...currentSlots, { start: selectedStart, end: selectedEnd }]);
+    saveData({ skipRender: true });
   }
   selectedWeekStart = targetWeek;
   if ($("#weekStart")) $("#weekStart").value = selectedWeekStart;
@@ -7934,14 +7977,14 @@ function bindEvents() {
   $("#timeSlotAvailableTable")?.addEventListener("click", (event) => {
     const cell = event.target.closest("[data-time-slot-gap]");
     if (!cell) return;
-    useAvailableGapForWeeklyTable(cell.dataset.gapDate, cell.dataset.gapStart, cell.dataset.gapEnd, cell.dataset.gapCentre, cell.dataset.gapRoom);
+    useAvailableGapForWeeklyTable(cell.dataset.gapDate, cell.dataset.gapStart, cell.dataset.gapEnd, cell.dataset.gapCentre, cell.dataset.gapRoom, cell.dataset.gapClickTime);
   });
   $("#timeSlotAvailableTable")?.addEventListener("keydown", (event) => {
     if (!["Enter", " "].includes(event.key)) return;
     const cell = event.target.closest("[data-time-slot-gap]");
     if (!cell) return;
     event.preventDefault();
-    useAvailableGapForWeeklyTable(cell.dataset.gapDate, cell.dataset.gapStart, cell.dataset.gapEnd, cell.dataset.gapCentre, cell.dataset.gapRoom);
+    useAvailableGapForWeeklyTable(cell.dataset.gapDate, cell.dataset.gapStart, cell.dataset.gapEnd, cell.dataset.gapCentre, cell.dataset.gapRoom, cell.dataset.gapClickTime);
   });
 
   document.addEventListener("click", (event) => {
