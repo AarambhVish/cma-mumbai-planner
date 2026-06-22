@@ -5912,9 +5912,15 @@ function freeSlotStartsInHour(slot, hour) {
 function timelineCellHtml(row, hour) {
   const slot = [...row.morning, ...row.afternoon, ...row.evening].find((item) => freeSlotCoversHour(item, hour));
   if (!slot) return `<td class="timeline-cell"></td>`;
-  const startsHere = freeSlotStartsInHour(slot, hour) || minutes(slot.start) < hour * 60;
-  const label = startsHere ? `${formatTimeShort(slot.start)}-${formatTimeShort(slot.end)}` : "";
-  return `<td class="timeline-cell free" tabindex="0" role="button" data-time-slot-gap="1" data-gap-date="${escapeHtml(row.date)}" data-gap-start="${escapeHtml(slot.start)}" data-gap-end="${escapeHtml(slot.end)}" data-gap-centre="${escapeHtml(row.centre)}" data-gap-room="${escapeHtml(row.room)}" title="${escapeHtml(`${row.room} free ${formatTimeRange(slot.start, slot.end)} (${slot.hours.toFixed(1)} hrs). Click to use in Weekly Timetable.`)}">${escapeHtml(label)}</td>`;
+  const slotStart = minutes(slot.start);
+  const slotEnd = minutes(slot.end);
+  const hourStart = hour * 60;
+  const hourEnd = (hour + 1) * 60;
+  const edgeClass = [
+    slotStart >= hourStart && slotStart < hourEnd ? "free-start" : "",
+    slotEnd > hourStart && slotEnd <= hourEnd ? "free-end" : ""
+  ].filter(Boolean).join(" ");
+  return `<td class="timeline-cell free ${edgeClass}" tabindex="0" role="button" data-time-slot-gap="1" data-gap-date="${escapeHtml(row.date)}" data-gap-start="${escapeHtml(slot.start)}" data-gap-end="${escapeHtml(slot.end)}" data-gap-centre="${escapeHtml(row.centre)}" data-gap-room="${escapeHtml(row.room)}" title="${escapeHtml(`${row.room} free ${formatTimeRange(slot.start, slot.end)} (${slot.hours.toFixed(1)} hrs). Click to use in Weekly Timetable.`)}"></td>`;
 }
 
 function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "") {
