@@ -5928,9 +5928,31 @@ function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "")
   const targetWeek = formatDateInput(getFriday(new Date(`${date}T00:00:00`)));
   const currentSlots = timeSlotsForDate(date);
   const exists = currentSlots.some((slot) => slot.start === start && slot.end === end);
+  let slotAlreadyExists = exists;
+  let selectedStart = start;
+  let selectedEnd = end;
   if (!exists) {
-    setTimeSlotsForDate(date, [...currentSlots, { start, end }]);
-    saveData({ skipRender: true });
+    const place = [centre, room].filter(Boolean).join(" - ");
+    const promptLabel = `${dayLabel(date)}${place ? ` (${place})` : ""}`;
+    const timeIn = prompt(`Available slot: ${promptLabel}\n\nEnter Time In:`, formatTimeShort(start));
+    if (timeIn === null) return;
+    const timeOut = prompt(`Available slot: ${promptLabel}\n\nEnter Time Out:`, formatTimeShort(end));
+    if (timeOut === null) return;
+    selectedStart = parseTimePart(timeIn);
+    selectedEnd = parseTimePart(timeOut);
+    if (!selectedStart || !selectedEnd || hoursBetween(selectedStart, selectedEnd) <= 0) {
+      alert("Please enter valid Time In and Time Out, e.g. 7am and 10am.");
+      return;
+    }
+    if (minutes(selectedStart) < minutes(start) || minutes(selectedEnd) > minutes(end)) {
+      alert(`Please keep the time between available slot ${formatTimeRange(start, end)}.`);
+      return;
+    }
+    slotAlreadyExists = currentSlots.some((slot) => slot.start === selectedStart && slot.end === selectedEnd);
+    if (!slotAlreadyExists) {
+      setTimeSlotsForDate(date, [...currentSlots, { start: selectedStart, end: selectedEnd }]);
+      saveData({ skipRender: true });
+    }
   }
   selectedWeekStart = targetWeek;
   if ($("#weekStart")) $("#weekStart").value = selectedWeekStart;
@@ -5941,7 +5963,7 @@ function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "")
   renderSharePanels();
   setTimeout(() => scrollToNavigationTarget("#weeklyView .panel"), 40);
   const place = [centre, room].filter(Boolean).join(" - ");
-  alert(`${exists ? "Time slot already exists" : "Time slot added"} in Weekly Timetable for ${dayLabel(date)} ${formatTimeRange(start, end)}${place ? ` (${place})` : ""}.`);
+  alert(`${slotAlreadyExists ? "Time slot already exists" : "Time slot added"} in Weekly Timetable for ${dayLabel(date)} ${formatTimeRange(selectedStart, selectedEnd)}${place ? ` (${place})` : ""}.`);
 }
 
 async function importRoomExcel(event) {
