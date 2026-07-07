@@ -990,6 +990,7 @@ let selectedWeekStart = formatDateInput(getFriday(new Date()));
 let weeklyScheduleMode = "week";
 let weeklyViewFrom = selectedWeekStart;
 let weeklyViewTo = addDays(selectedWeekStart, 6);
+let selectedSyllabusLevel = "Foundation";
 let professorManagementView = "all";
 let activeAlertType = "";
 
@@ -4296,19 +4297,27 @@ function setSyllabusTopicProfessor(batchId, topicId, professorId) {
 }
 
 function syllabusFilterValue(batch) {
-  return `${batch.level}__${batch.attempt}`;
+  return String(batch.attempt || "");
 }
 
 function syllabusFilterLabel(value) {
-  if (value === "All") return "All Batches";
-  const [level, attempt] = value.split("__");
-  return `${level} ${attemptCode(attempt)}`;
+  if (value === "All") return "All Attempts";
+  return attemptCode(value);
+}
+
+function renderSyllabusLevelTabs(level = selectedSyllabusLevel) {
+  const tabs = $("#syllabusLevelTabs");
+  if (!tabs) return;
+  tabs.querySelectorAll("[data-syllabus-level]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.syllabusLevel === level);
+  });
 }
 
 function syllabusVisibleBatches() {
   const filter = $("#syllabusFilter")?.value || "All";
   const headPaperNos = isProfessorMode() ? loggedInProfessorHeadPaperNos() : [];
   return activeProgramBatches()
+    .filter((batch) => batch.level === selectedSyllabusLevel)
     .filter((batch) => !headPaperNos.length || papersForLevel(batch.level).some((paper) => headPaperNos.includes(Number(paperNumbers[paper]))))
     .filter((batch) => filter === "All" || syllabusFilterValue(batch) === filter)
     .sort((a, b) =>
@@ -4353,22 +4362,25 @@ function renderSyllabusTracker(options = {}) {
   const scopedHeadPaperNos = Array.isArray(options.headPaperNos) ? options.headPaperNos.map(normalizePaperNo).filter(Boolean) : null;
   if (!filter || !head || !body) return;
 
+  const isMainSyllabusTracker = !options.filterSelector || options.filterSelector === "#syllabusFilter";
+  const scopedLevel = options.level ?? (isMainSyllabusTracker ? selectedSyllabusLevel : "");
+  if (isMainSyllabusTracker) renderSyllabusLevelTabs(scopedLevel);
   const selected = filter.value || "All";
   const headPaperNos = scopedHeadPaperNos || (isProfessorMode() ? loggedInProfessorHeadPaperNos() : []);
   const availableBatches = activeProgramBatches()
+    .filter((batch) => !scopedLevel || batch.level === scopedLevel)
     .filter((batch) => !headPaperNos.length || papersForLevel(batch.level).some((paper) => headPaperNos.includes(Number(paperNumbers[paper]))));
   const filterOptions = ["All", ...new Set(availableBatches.map(syllabusFilterValue))]
     .sort((a, b) => {
       if (a === "All") return -1;
       if (b === "All") return 1;
-      const [aLevel, aAttempt] = a.split("__");
-      const [bLevel, bAttempt] = b.split("__");
-      return levelOrder(aLevel) - levelOrder(bLevel) || String(aAttempt).localeCompare(String(bAttempt));
+      return String(a).localeCompare(String(b));
     });
   filter.innerHTML = filterOptions.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(syllabusFilterLabel(value))}</option>`).join("");
   if (![...filter.options].some((option) => option.value === selected)) filter.value = "All";
 
   const batches = (options.batchProvider ? options.batchProvider() : syllabusVisibleBatches())
+    .filter((batch) => !scopedLevel || batch.level === scopedLevel)
     .filter((batch) => !headPaperNos.length || papersForLevel(batch.level).some((paper) => headPaperNos.includes(Number(paperNumbers[paper]))))
     .filter((batch) => (filter.value || "All") === "All" || syllabusFilterValue(batch) === (filter.value || "All"));
   const levels = new Set(batches.map((batch) => batch.level));
@@ -8150,6 +8162,13 @@ function bindEvents() {
     renderSyllabusTracker();
   }));
   $("#syllabusFilter")?.addEventListener("change", renderSyllabusTracker);
+  $("#syllabusLevelTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-syllabus-level]");
+    if (!button) return;
+    selectedSyllabusLevel = button.dataset.syllabusLevel;
+    if ($("#syllabusFilter")) $("#syllabusFilter").value = "All";
+    renderSyllabusTracker();
+  });
   $("#professorHeadSyllabusFilter")?.addEventListener("change", renderProfessorHeadSyllabusPanel);
   $("#syllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
   $("#professorHeadSyllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);

@@ -2433,6 +2433,33 @@ tr:last-child td {
   grid-template-columns: repeat(4, minmax(150px, 1fr));
 }
 
+.syllabus-level-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #cfe0ea;
+  border-radius: 8px;
+  background: #f7fbfd;
+}
+
+.syllabus-level-tabs button {
+  min-height: 30px;
+  padding: 6px 12px;
+  border-color: transparent;
+  background: transparent;
+  color: #40566a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.syllabus-level-tabs button.active {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  box-shadow: 0 4px 10px rgba(0, 119, 145, 0.18);
+}
+
 .syllabus-wrap {
   max-height: 72vh;
   border-top: 1px solid var(--line);

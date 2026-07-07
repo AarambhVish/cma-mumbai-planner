@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260707-always-weekly-table">
+    <link rel="stylesheet" href="styles.css?v=20260707-syllabus-level-tabs">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -734,8 +734,13 @@ Professor : Sandesh Sir
               <span>Topic completion by batch, with hours completed and pending.</span>
             </div>
             <div class="row-actions">
+              <div class="syllabus-level-tabs" id="syllabusLevelTabs" aria-label="Syllabus level">
+                <button type="button" data-syllabus-level="Foundation">Foundation</button>
+                <button type="button" data-syllabus-level="Inter">Inter</button>
+                <button type="button" data-syllabus-level="Final">Final</button>
+              </div>
               <label>
-                Level / Attempt
+                Attempt
                 <select id="syllabusFilter"></select>
               </label>
               <button class="ghost" id="syllabusFullscreenBtn" type="button">Full Screen</button>
@@ -897,6 +902,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260707-always-weekly-table"></script>
+    <script src="app.js?v=20260707-syllabus-level-tabs"></script>
   </body>
 </html>
