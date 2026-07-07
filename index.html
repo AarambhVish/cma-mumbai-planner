@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260707-weekly-custom-view">
+    <link rel="stylesheet" href="styles.css?v=20260707-add-slot-prompt">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -221,46 +221,7 @@
                 Column Size
                 <input id="weeklyColumnSize" type="range" min="130" max="280" step="10">
               </label>
-              <label class="sheet-link-field">
-                Google Sheet
-                <input id="googleSheetLinkInput" type="url" placeholder="Paste Google Sheet link">
-              </label>
-              <label class="import-all-field" title="Import all readable timetable rows from the sheet and keep them saved in the database">
-                <input id="importFullSheetToggle" type="checkbox">
-                Full sheet
-              </label>
-              <div class="slot-range-tools" aria-label="Add weekly time slot">
-                <label>
-                  Time In
-                  <input id="weeklySlotStart" type="text" placeholder="7am">
-                </label>
-                <label>
-                  Time Out
-                  <input id="weeklySlotEnd" type="text" placeholder="10am">
-                </label>
-                <label>
-                  Add On
-                  <select id="weeklySlotScope">
-                    <option value="specific">Selected Date</option>
-                    <option value="week">This Week</option>
-                    <option value="range">Custom Range</option>
-                  </select>
-                </label>
-                <label>
-                  Date
-                  <input id="weeklySlotDate" type="date">
-                </label>
-                <label>
-                  From
-                  <input id="weeklySlotFrom" type="date">
-                </label>
-                <label>
-                  To
-                  <input id="weeklySlotTo" type="date">
-                </label>
-              </div>
               <button id="addWeeklyRowBtn" type="button">Add Time Slot</button>
-              <button class="import-sheet-btn" id="importGoogleSheetBtn" type="button" title="Import timetable from Google Sheet and save it in this software">Import Google Sheet</button>
               <button class="ghost" id="weeklyFullscreenBtn" type="button">Full Screen</button>
             </div>
           </div>
@@ -936,6 +897,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260707-weekly-custom-view"></script>
+    <script src="app.js?v=20260707-add-slot-prompt"></script>
   </body>
 </html>

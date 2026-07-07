@@ -2090,7 +2090,6 @@ function navigationGroups() {
       title: "Weekly Table",
       items: [
         { label: "Weekly Timetable", target: "#weeklyView .panel" },
-        { label: "Google Import", target: "#importGoogleSheetBtn" },
         { label: "Full Screen", target: "#weeklyFullscreenBtn" }
       ]
     },
@@ -3026,12 +3025,25 @@ function askWeeklySlotAddDates(date) {
 }
 
 function askWeeklySlotAddDatesForScope() {
-  const scope = $("#weeklySlotScope")?.value || "specific";
-  if (scope === "specific") return askWeeklySlotAddDates($("#weeklySlotDate")?.value || selectedWeekStart);
-  const dates = weeklySlotScopeDates();
-  if (!dates.length) return [];
-  const label = scope === "week" ? "this week" : "the selected date range";
-  return confirm(`Add this time slot to ${label} (${dates[0]} to ${dates[dates.length - 1]})?`) ? dates : [];
+  const visibleDates = weeklyViewDates();
+  const rangeLabel = visibleDates.length > 1
+    ? `${visibleDates[0]} to ${visibleDates[visibleDates.length - 1]}`
+    : visibleDates[0] || selectedWeekStart;
+  const scopeAnswer = prompt(
+    `Add time slot to:\n\n1. This day\n2. All visible days (${rangeLabel})\n\nType 1 or 2:`,
+    "1"
+  );
+  if (scopeAnswer === null) return [];
+  if (scopeAnswer.trim() === "2") return visibleDates;
+  const dateInput = prompt("Enter date for this time slot:", visibleDates[0] || selectedWeekStart);
+  if (dateInput === null) return [];
+  const parsedDate = new Date(`${dateInput}T00:00:00`);
+  if (Number.isNaN(parsedDate.getTime())) {
+    alert("Please enter a valid date.");
+    return [];
+  }
+  const date = formatDateInput(parsedDate);
+  return [date];
 }
 
 function addTimeSlotToDate(date, start, end) {
@@ -5794,14 +5806,18 @@ function addSlot(event) {
 }
 
 function addWeeklyRow() {
-  const start = parseTimePart($("#weeklySlotStart")?.value || "");
-  const end = parseTimePart($("#weeklySlotEnd")?.value || "");
+  const dates = askWeeklySlotAddDatesForScope();
+  if (!dates.length) return;
+  const start = parseTimePart(prompt("Time In:", "7am") || "");
+  if (!start) {
+    alert("Please enter a valid Time In, e.g. 7am.");
+    return;
+  }
+  const end = parseTimePart(prompt("Time Out:", "10am") || "");
   if (!start || !end || hoursBetween(start, end) <= 0) {
     alert("Please enter valid Time In and Time Out, e.g. 7am and 10am.");
     return;
   }
-  const dates = askWeeklySlotAddDatesForScope();
-  if (!dates.length) return;
   let added = 0;
   dates.forEach((date) => {
     if (addTimeSlotToDate(date, start, end)) added += 1;
@@ -8247,7 +8263,7 @@ function bindEvents() {
   });
   $("#weeklyTable").addEventListener("change", updateWeeklySlot);
   $("#addWeeklyRowBtn").addEventListener("click", addWeeklyRow);
-  $("#googleSheetLinkInput").addEventListener("change", (event) => {
+  $("#googleSheetLinkInput")?.addEventListener("change", (event) => {
     data.settings.googleSheetLink = event.target.value.trim();
     saveData();
   });
@@ -8260,7 +8276,7 @@ function bindEvents() {
     }
   });
   $("#weeklyColumnSize").addEventListener("change", saveData);
-  $("#importGoogleSheetBtn").addEventListener("click", importGoogleSheetTimetable);
+  $("#importGoogleSheetBtn")?.addEventListener("click", importGoogleSheetTimetable);
   $("#weeklyFullscreenBtn")?.addEventListener("click", () => {
     const panel = $("#weeklyView .panel");
     if (!panel) return;
