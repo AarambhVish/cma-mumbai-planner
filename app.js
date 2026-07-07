@@ -2913,6 +2913,23 @@ function historicalProgramTimeSlotsForDate(date) {
   return Array.from(slots.values()).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
 }
 
+function weeklyTemplateTimeSlots() {
+  const map = new Map();
+  data.slots
+    .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram())
+    .filter(slotHasTimetableEntry)
+    .forEach((slot) => {
+      if (slot?.start && slot?.end) map.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
+    });
+  Object.values(data.dateTimeSlots || {}).flat().forEach((slot) => {
+    if (slot?.start && slot?.end) map.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
+  });
+  if (!map.size) {
+    defaultTimeSlots.forEach((slot) => map.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end }));
+  }
+  return Array.from(map.values()).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+}
+
 function explicitTimeSlotsForDate(date) {
   const slots = data.dateTimeSlots?.[date] || [];
   return slots.map((slot) => ({ start: slot.start, end: slot.end, manual: Boolean(slot.manual) })).sort((a, b) => a.start.localeCompare(b.start));
@@ -2936,9 +2953,10 @@ function boardTimeSlotsForDate(date, activeTimeSlots = ["All"]) {
       if (slot.start && slot.end) slotMap.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
     });
   const allSlots = Array.from(slotMap.values()).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
-  if (activeTimeSlots.includes("All")) return allSlots;
-  const filtered = allSlots.filter((slot) => activeTimeSlots.includes(`${slot.start}|${slot.end}`));
-  return filtered.length ? filtered : allSlots;
+  const displaySlots = allSlots.length ? allSlots : weeklyTemplateTimeSlots();
+  if (activeTimeSlots.includes("All")) return displaySlots;
+  const filtered = displaySlots.filter((slot) => activeTimeSlots.includes(`${slot.start}|${slot.end}`));
+  return filtered.length ? filtered : displaySlots;
 }
 
 function setTimeSlotsForDate(date, slots) {
