@@ -1357,10 +1357,6 @@ function ensureDataShape() {
   if (!Array.isArray(data.timeSlots) || !data.timeSlots.length) {
     data.timeSlots = structuredClone(defaultTimeSlots);
   }
-  data.slots.forEach((slot) => {
-    const exists = data.timeSlots.some((item) => item.start === slot.start && item.end === slot.end);
-    if (!exists) data.timeSlots.push({ start: slot.start, end: slot.end });
-  });
   data.timeSlots.sort((a, b) => a.start.localeCompare(b.start));
   Object.keys(data.dateTimeSlots).forEach((date) => {
     if (!Array.isArray(data.dateTimeSlots[date])) {
@@ -1368,7 +1364,17 @@ function ensureDataShape() {
       return;
     }
     data.dateTimeSlots[date] = data.dateTimeSlots[date]
-      .filter((slot) => slot?.start && slot?.end && hoursBetween(slot.start, slot.end) > 0)
+      .filter((slot) =>
+        slot?.start &&
+        slot?.end &&
+        hoursBetween(slot.start, slot.end) > 0 &&
+        (slot.manual || data.slots.some((entry) =>
+          entry.date === date &&
+          entry.start === slot.start &&
+          entry.end === slot.end &&
+          slotHasTimetableEntry(entry)
+        ))
+      )
       .sort((a, b) => a.start.localeCompare(b.start));
   });
   data.slots = data.slots.map((slot) => {
@@ -2690,26 +2696,47 @@ function timeSlotsForDate(date) {
   return slots.map((slot) => ({ start: slot.start, end: slot.end })).sort((a, b) => a.start.localeCompare(b.start));
 }
 
+function slotHasTimetableEntry(slot) {
+  return Boolean(slot && (slotProfessorId(slot) || slot.noLecture || slot.subject));
+}
+
+function timeSlotEverHasProgramEntry(start, end) {
+  return data.slots.some((slot) =>
+    slot.start === start &&
+    slot.end === end &&
+    batchProgram(batchById(slot.batchId)) === activeProgram() &&
+    slotHasTimetableEntry(slot)
+  );
+}
+
+function explicitTimeSlotsForDate(date) {
+  const slots = data.dateTimeSlots?.[date] || [];
+  return slots.map((slot) => ({ start: slot.start, end: slot.end, manual: Boolean(slot.manual) })).sort((a, b) => a.start.localeCompare(b.start));
+}
+
 function boardTimeSlotsForDate(date, activeTimeSlots = ["All"]) {
   const slotMap = new Map();
-  timeSlotsForDate(date).forEach((slot) => {
-    if (slot?.start && slot?.end) slotMap.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
-  });
+  explicitTimeSlotsForDate(date)
+    .filter((slot) => slot.manual)
+    .forEach((slot) => {
+      if (slot?.start && slot?.end) slotMap.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
+    });
   data.slots
     .filter((slot) => slot.date === date)
     .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram())
+    .filter(slotHasTimetableEntry)
     .forEach((slot) => {
       if (slot.start && slot.end) slotMap.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
     });
   const allSlots = Array.from(slotMap.values()).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
-  if (activeTimeSlots.includes("All")) return allSlots.length ? allSlots : [...defaultTimeSlots];
+  if (activeTimeSlots.includes("All")) return allSlots;
   const filtered = allSlots.filter((slot) => activeTimeSlots.includes(`${slot.start}|${slot.end}`));
-  return filtered.length ? filtered : allSlots.length ? allSlots : [...defaultTimeSlots];
+  return filtered.length ? filtered : allSlots;
 }
 
 function setTimeSlotsForDate(date, slots) {
   data.dateTimeSlots[date] = slots
-    .map((slot) => ({ start: slot.start, end: slot.end }))
+    .map((slot) => ({ start: slot.start, end: slot.end, manual: Boolean(slot.manual) }))
     .filter((slot) => slot.start && slot.end && hoursBetween(slot.start, slot.end) > 0)
     .sort((a, b) => a.start.localeCompare(b.start));
 }
@@ -2752,33 +2779,81 @@ function weeklySlotScopeDates() {
   return [$("#weeklySlotDate")?.value || selectedWeekStart];
 }
 
+function timetableDateRange() {
+  const dates = [
+    ...data.slots.map((slot) => slot.date),
+    ...Object.keys(data.dateTimeSlots || {}),
+    selectedWeekStart,
+    addDays(selectedWeekStart, 6)
+  ].filter(Boolean).sort();
+  return {
+    from: dates[0] || selectedWeekStart,
+    to: dates[dates.length - 1] || addDays(selectedWeekStart, 6)
+  };
+}
+
+function sameWeekdayDatesAcrossTimetable(date) {
+  const targetDay = new Date(`${date}T00:00:00`).getDay();
+  const range = timetableDateRange();
+  return datesBetween(range.from, range.to).filter((item) => new Date(`${item}T00:00:00`).getDay() === targetDay);
+}
+
+function askWeeklySlotAddDates(date) {
+  const dayDates = [date];
+  const allWeekDates = sameWeekdayDatesAcrossTimetable(date);
+  const answer = prompt(
+    `Add this time slot only for ${dayLabel(date)}, or for the same day in all saved weeks?\n\nType 1 for only this day.\nType 2 for all weeks.`,
+    "1"
+  );
+  if (answer === null) return [];
+  if (answer.trim() === "2") return allWeekDates.length ? allWeekDates : dayDates;
+  return dayDates;
+}
+
 function addTimeSlotToDate(date, start, end) {
-  const daySlots = timeSlotsForDate(date);
-  if (daySlots.some((slot) => slot.start === start && slot.end === end)) return false;
-  setTimeSlotsForDate(date, [...daySlots, { start, end }]);
+  const explicitSlots = explicitTimeSlotsForDate(date);
+  const lectureSlotExists = data.slots.some((slot) =>
+    slot.date === date &&
+    slot.start === start &&
+    slot.end === end &&
+    batchProgram(batchById(slot.batchId)) === activeProgram() &&
+    slotHasTimetableEntry(slot)
+  );
+  if (lectureSlotExists || explicitSlots.some((slot) => slot.start === start && slot.end === end)) return false;
+  setTimeSlotsForDate(date, [...explicitSlots, { start, end, manual: true }]);
   return true;
 }
 
 function moveTimeSlotOnDate(date, previousStart, previousEnd, start, end) {
-  const daySlots = timeSlotsForDate(date);
+  const daySlots = explicitTimeSlotsForDate(date);
   const index = daySlots.findIndex((slot) => slot.start === previousStart && slot.end === previousEnd);
-  if (index === -1) return false;
-  daySlots[index] = { start, end };
+  let moved = false;
+  if (index !== -1) {
+    daySlots[index] = { start, end };
+    setTimeSlotsForDate(date, daySlots);
+    moved = true;
+  }
   data.slots.forEach((slot) => {
     if (slot.date === date && slot.start === previousStart && slot.end === previousEnd) {
       slot.start = start;
       slot.end = end;
+      moved = true;
     }
   });
-  setTimeSlotsForDate(date, daySlots);
-  return true;
+  return moved;
 }
 
 function allKnownTimeSlots() {
   const map = new Map();
-  [...data.timeSlots, ...Object.values(data.dateTimeSlots || {}).flat()].forEach((slot) => {
+  Object.values(data.dateTimeSlots || {}).flat().forEach((slot) => {
     if (slot?.start && slot?.end) map.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
   });
+  data.slots
+    .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram())
+    .filter(slotHasTimetableEntry)
+    .forEach((slot) => {
+      if (slot?.start && slot?.end) map.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
+    });
   return Array.from(map.values()).sort((a, b) => a.start.localeCompare(b.start));
 }
 
@@ -5372,7 +5447,7 @@ function deleteTimeSlotWithConfirmation(date, start, end) {
   if (!confirm(message)) return false;
 
   const removedSlotIds = new Set(rowSlots.map((slot) => slot.id));
-  const nextSlots = timeSlotsForDate(date).filter((slot) => !(slot.start === start && slot.end === end));
+  const nextSlots = explicitTimeSlotsForDate(date).filter((slot) => !(slot.start === start && slot.end === end));
   setTimeSlotsForDate(date, nextSlots);
   data.slots = data.slots.filter((slot) => !(slot.date === date && slot.start === start && slot.end === end));
   data.actualLectures = data.actualLectures.filter((entry) => !removedSlotIds.has(entry.slotId));
@@ -5422,7 +5497,7 @@ function renderWeeklyTable() {
     return;
   }
 
-  $("#weeklyTable").innerHTML = dates.flatMap((date) => {
+  const weeklyRows = dates.flatMap((date) => {
     const visibleTimeSlots = boardTimeSlotsForDate(date, activeTimeSlots);
     return visibleTimeSlots.map((timeSlot, slotIndex) => {
       const dateCell = slotIndex === 0 ? `<td class="weekly-date-col weekly-date-merged" rowspan="${visibleTimeSlots.length}">
@@ -5471,7 +5546,10 @@ function renderWeeklyTable() {
         ${cells}
       </tr>`;
     })
-  }).join("");
+  });
+  $("#weeklyTable").innerHTML = weeklyRows.length
+    ? weeklyRows.join("")
+    : `<tr><td colspan="${visibleBatches.length + 2}" class="empty">No lecture slots found for this week. Add a time slot only when you want to plan a lecture.</td></tr>`;
 }
 
 function addSlot(event) {
@@ -5501,7 +5579,8 @@ function addWeeklyRow() {
     alert("Please enter valid Time In and Time Out, e.g. 7am and 10am.");
     return;
   }
-  const dates = weeklySlotScopeDates();
+  const baseDate = $("#weeklySlotDate")?.value || selectedWeekStart;
+  const dates = askWeeklySlotAddDates(baseDate);
   if (!dates.length) return;
   let added = 0;
   dates.forEach((date) => {
@@ -5928,7 +6007,7 @@ function nearbyTimetableSlotOptions(date, clickedTime) {
   const from = clickedMinutes - 30;
   const to = clickedMinutes + 30;
   const ranges = new Map();
-  timeSlotsForDate(date).forEach((slot) => {
+  boardTimeSlotsForDate(date, ["All"]).forEach((slot) => {
     if (minutes(slot.start) >= from && minutes(slot.start) <= to) ranges.set(`${slot.start}|${slot.end}`, { ...slot, batches: [] });
   });
   data.slots
@@ -5979,7 +6058,6 @@ function chooseAvailableGapSlot(date, start, end, clickedTime, centre = "", room
 function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "", clickedTime = "") {
   if (!date || !start || !end) return;
   const targetWeek = formatDateInput(getFriday(new Date(`${date}T00:00:00`)));
-  const currentSlots = timeSlotsForDate(date);
   const selectedSlot = chooseAvailableGapSlot(date, start, end, clickedTime || start, centre, room);
   if (!selectedSlot) return;
   const selectedStart = selectedSlot.start;
@@ -5992,9 +6070,14 @@ function useAvailableGapForWeeklyTable(date, start, end, centre = "", room = "",
     alert(`Please keep the time between available slot ${formatTimeRange(start, end)}.`);
     return;
   }
-  const slotAlreadyExists = currentSlots.some((slot) => slot.start === selectedStart && slot.end === selectedEnd);
-  if (!slotAlreadyExists) {
-    setTimeSlotsForDate(date, [...currentSlots, { start: selectedStart, end: selectedEnd }]);
+  const targetDates = askWeeklySlotAddDates(date);
+  if (!targetDates.length) return;
+  let added = 0;
+  targetDates.forEach((targetDate) => {
+    if (addTimeSlotToDate(targetDate, selectedStart, selectedEnd)) added += 1;
+  });
+  const slotAlreadyExists = !added;
+  if (added) {
     saveData({ skipRender: true });
   }
   selectedWeekStart = targetWeek;
