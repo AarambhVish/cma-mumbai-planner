@@ -1,5 +1,7 @@
 const DATA_SHEET_NAME = "CMA_Data";
+const BACKUP_SHEET_NAME = "CMA_Backups";
 const CHUNK_SIZE = 45000;
+const MAX_BACKUPS = 10;
 
 function doGet(e) {
   const action = e.parameter.action || "";
@@ -26,6 +28,7 @@ function doPost(e) {
 
     JSON.parse(payload);
     const sheet = dataSheet_();
+    backupCurrentPayload_(sheet);
     writePayload_(sheet, payload);
     sheet.getRange("A2").setValue(new Date());
     sheet.getRange("B2").setValue("Last saved");
@@ -39,6 +42,50 @@ function doPost(e) {
     return ContentService
       .createTextOutput(JSON.stringify({ ok: false, error: String(error) }))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function backupSheet_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(BACKUP_SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(BACKUP_SHEET_NAME);
+    sheet.getRange(1, 1, 1, 4).setValues([["Backup timestamp", "Chunk number", "Chunk text", "Payload characters"]]);
+    sheet.getRange("A1:D1").setFontWeight("bold");
+  }
+  return sheet;
+}
+
+function backupCurrentPayload_(dataSheet) {
+  const previousPayload = readPayload_(dataSheet);
+  if (!previousPayload) return;
+  const backupSheet = backupSheet_();
+  const stamp = new Date();
+  const rows = [];
+  for (let index = 0; index < previousPayload.length; index += CHUNK_SIZE) {
+    rows.push([stamp, rows.length + 1, previousPayload.slice(index, index + CHUNK_SIZE), previousPayload.length]);
+  }
+  if (rows.length) {
+    backupSheet.getRange(backupSheet.getLastRow() + 1, 1, rows.length, 4).setValues(rows);
+  }
+  pruneBackups_(backupSheet);
+}
+
+function pruneBackups_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return;
+  const values = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+  const stamps = [];
+  values.forEach((value) => {
+    const stamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    if (stamp && !stamps.includes(stamp)) stamps.push(stamp);
+  });
+  stamps.sort((a, b) => b - a);
+  const keep = new Set(stamps.slice(0, MAX_BACKUPS));
+  for (let row = lastRow; row >= 2; row -= 1) {
+    const value = sheet.getRange(row, 1).getValue();
+    const stamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    if (!keep.has(stamp)) sheet.deleteRow(row);
   }
 }
 

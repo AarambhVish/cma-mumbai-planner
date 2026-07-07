@@ -987,6 +987,9 @@ const defaultData = {
 let data = loadData();
 ensureDataShape();
 let selectedWeekStart = formatDateInput(getFriday(new Date()));
+let weeklyScheduleMode = "week";
+let weeklyViewFrom = selectedWeekStart;
+let weeklyViewTo = addDays(selectedWeekStart, 6);
 let professorManagementView = "all";
 let activeAlertType = "";
 
@@ -1806,7 +1809,171 @@ function isOldAutoProfessorPassword(professor) {
   return !professor.loginPassword || professor.loginPassword === oldAutoProfessorPassword(professor);
 }
 
+const cloudDeviceKey = `${storeKey}-device-id`;
+const cloudBackupKey = `${storeKey}-cloud-backups`;
+const mergeArrayKeys = ["slots", "progress", "topicPlans", "actualLectures", "notifications", "roomBookings"];
+
+function localDeviceId() {
+  let id = localStorage.getItem(cloudDeviceKey);
+  if (!id) {
+    id = uid("dev");
+    localStorage.setItem(cloudDeviceKey, id);
+  }
+  return id;
+}
+
+function normalizeForCompare(value) {
+  if (Array.isArray(value)) return value.map(normalizeForCompare);
+  if (value && typeof value === "object") {
+    return Object.keys(value).sort().reduce((next, key) => {
+      if (["_updatedAt", "_updatedBy"].includes(key)) return next;
+      next[key] = normalizeForCompare(value[key]);
+      return next;
+    }, {});
+  }
+  return value;
+}
+
+function comparableJson(value) {
+  return JSON.stringify(normalizeForCompare(value || null));
+}
+
+function stampChangedRecords(previousData, nextData, stamp = new Date().toISOString()) {
+  const deviceId = localDeviceId();
+  mergeArrayKeys.forEach((key) => {
+    if (!Array.isArray(nextData[key])) return;
+    const previousById = new Map((previousData?.[key] || []).map((item) => [item.id, item]));
+    nextData[key].forEach((item) => {
+      if (!item?.id) return;
+      const previous = previousById.get(item.id);
+      if (!previous || comparableJson(previous) !== comparableJson(item)) {
+        item._updatedAt = stamp;
+        item._updatedBy = deviceId;
+      }
+    });
+  });
+  if (nextData.syllabusCompletion && typeof nextData.syllabusCompletion === "object") {
+    const previousCompletion = previousData?.syllabusCompletion || {};
+    Object.entries(nextData.syllabusCompletion).forEach(([key, value]) => {
+      const normalized = value && typeof value === "object" ? value : { done: Boolean(value), professorId: "" };
+      if (comparableJson(previousCompletion[key]) !== comparableJson(normalized)) {
+        nextData.syllabusCompletion[key] = {
+          ...normalized,
+          _updatedAt: stamp,
+          _updatedBy: deviceId
+        };
+      }
+    });
+  }
+  nextData.settings.lastLocalUpdatedAt = stamp;
+  nextData.settings.lastEditedDeviceId = deviceId;
+}
+
+function localStoredData() {
+  try {
+    const raw = localStorage.getItem(storeKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function keepCloudBackup(label, snapshot) {
+  try {
+    if (!snapshot) return;
+    const backups = JSON.parse(localStorage.getItem(cloudBackupKey) || "[]");
+    backups.unshift({
+      label,
+      savedAt: new Date().toISOString(),
+      data: snapshot
+    });
+    localStorage.setItem(cloudBackupKey, JSON.stringify(backups.slice(0, 8)));
+  } catch {
+    // Local backup is best-effort; cloud save/load should continue.
+  }
+}
+
+function recordUpdatedAt(record) {
+  return record?._updatedAt || record?.updatedAt || record?.dateUpdated || "";
+}
+
+function newerRecord(localItem, cloudItem) {
+  if (!localItem) return structuredClone(cloudItem);
+  if (!cloudItem) return structuredClone(localItem);
+  const localStamp = recordUpdatedAt(localItem);
+  const cloudStamp = recordUpdatedAt(cloudItem);
+  if (localStamp && cloudStamp && cloudStamp > localStamp) return structuredClone(cloudItem);
+  return structuredClone(localItem);
+}
+
+function mergeArrayById(localItems = [], cloudItems = []) {
+  const map = new Map();
+  cloudItems.forEach((item) => {
+    if (item?.id) map.set(item.id, structuredClone(item));
+  });
+  localItems.forEach((item) => {
+    if (!item?.id) return;
+    map.set(item.id, newerRecord(item, map.get(item.id)));
+  });
+  return Array.from(map.values());
+}
+
+function mergeSyllabusCompletion(localCompletion = {}, cloudCompletion = {}) {
+  const merged = { ...structuredClone(cloudCompletion || {}) };
+  Object.entries(localCompletion || {}).forEach(([key, localValue]) => {
+    const cloudValue = merged[key];
+    const localRecord = localValue && typeof localValue === "object" ? localValue : { done: Boolean(localValue), professorId: "" };
+    const cloudRecord = cloudValue && typeof cloudValue === "object" ? cloudValue : cloudValue === undefined ? null : { done: Boolean(cloudValue), professorId: "" };
+    merged[key] = newerRecord(localRecord, cloudRecord);
+  });
+  return merged;
+}
+
+function mergeDateTimeSlots(localSlots = {}, cloudSlots = {}) {
+  const merged = structuredClone(cloudSlots || {});
+  Object.entries(localSlots || {}).forEach(([date, slots]) => {
+    const map = new Map((merged[date] || []).map((slot) => [`${slot.start}|${slot.end}`, slot]));
+    (slots || []).forEach((slot) => {
+      if (slot?.start && slot?.end) map.set(`${slot.start}|${slot.end}`, { ...slot });
+    });
+    merged[date] = Array.from(map.values()).sort((a, b) => a.start.localeCompare(b.start));
+  });
+  return merged;
+}
+
+function mergeCloudSafeData(localData, cloudData) {
+  if (!cloudData) return structuredClone(localData);
+  const cloudSettings = cloudData.settings || {};
+  const localSettings = localData.settings || {};
+  const merged = {
+    ...structuredClone(defaultData),
+    ...structuredClone(cloudData),
+    settings: {
+      ...cloudSettings,
+      ...localSettings,
+      lastCloudSavedAt: [cloudSettings.lastCloudSavedAt, localSettings.lastCloudSavedAt].filter(Boolean).sort().pop() || "",
+      cloudMergeEnabled: true,
+      lastCloudMergeAt: new Date().toISOString()
+    }
+  };
+  mergeArrayKeys.forEach((key) => {
+    merged[key] = mergeArrayById(localData[key], cloudData[key]);
+  });
+  merged.syllabusCompletion = mergeSyllabusCompletion(localData.syllabusCompletion, cloudData.syllabusCompletion);
+  merged.dateTimeSlots = mergeDateTimeSlots(localData.dateTimeSlots, cloudData.dateTimeSlots);
+  merged.professors = mergeArrayById(localData.professors, cloudData.professors);
+  merged.batches = mergeArrayById(localData.batches, cloudData.batches);
+  merged.centres = [...new Set([...(cloudData.centres || []), ...(localData.centres || [])])];
+  merged.timeSlots = mergeArrayById(
+    (localData.timeSlots || []).map((slot, index) => ({ id: `${slot.start}|${slot.end}|${index}`, ...slot })),
+    (cloudData.timeSlots || []).map((slot, index) => ({ id: `${slot.start}|${slot.end}|${index}`, ...slot }))
+  ).map(({ id, ...slot }) => slot);
+  return preserveLocalMasterSettings(localData, merged);
+}
+
 function saveData(options = {}) {
+  const previousData = localStoredData();
+  if (!options.skipStamp) stampChangedRecords(previousData, data);
   localStorage.setItem(storeKey, JSON.stringify(data));
   if (!options.skipRender) render();
   if (!options.skipCloudSave) scheduleCloudAutoSave();
@@ -2382,15 +2549,17 @@ async function loadCloudData() {
       return;
     }
     const localBeforeLoad = structuredClone(data);
+    keepCloudBackup("before-cloud-load-local", localBeforeLoad);
+    keepCloudBackup("cloud-load-source", response.data);
     const cloudWithImports = preserveNewerLocalGoogleImports(localBeforeLoad, response.data);
-    data = { ...structuredClone(defaultData), ...preserveLocalMasterSettings(localBeforeLoad, cloudWithImports) };
+    data = mergeCloudSafeData(localBeforeLoad, cloudWithImports);
     ensureDataShape();
     data.settings.googleWebAppUrl = fixedCloudSyncUrl;
-    saveData({ skipCloudSave: true });
+    saveData({ skipCloudSave: true, skipStamp: true });
     updateCloudStatus(data.settings.lastCloudSavedAt ? `Loaded ${new Date(data.settings.lastCloudSavedAt).toLocaleTimeString()}` : "Loaded", "saved");
     alert(data.settings.lastCloudSavedAt
-      ? `Cloud data loaded. Last cloud save was ${new Date(data.settings.lastCloudSavedAt).toLocaleString()}.\n\n${timetableSummaryText()}`
-      : `Cloud data loaded into this device.\n\n${timetableSummaryText()}`);
+      ? `Cloud data loaded and merged. Last cloud save was ${new Date(data.settings.lastCloudSavedAt).toLocaleString()}.\n\n${timetableSummaryText()}`
+      : `Cloud data loaded and merged into this device.\n\n${timetableSummaryText()}`);
   } catch (error) {
     updateCloudStatus("Load failed", "error");
     alert(`${error.message} Check that your pasted URL is the deployed Web App /exec URL and access is set to Anyone with the link.`);
@@ -2399,12 +2568,24 @@ async function loadCloudData() {
   }
 }
 
-function saveCloudData(options = {}) {
+async function saveCloudData(options = {}) {
   const silent = Boolean(options.silent);
   const url = requireCloudSyncUrl();
   if (!url) return;
   const saveStamp = new Date().toISOString();
+  try {
+    const response = await requestCloudData(url, 20000);
+    if (response?.ok && response.data) {
+      keepCloudBackup("before-cloud-save-local", structuredClone(data));
+      keepCloudBackup("before-cloud-save-remote", response.data);
+      data = mergeCloudSafeData(data, response.data);
+      ensureDataShape();
+    }
+  } catch (error) {
+    if (!silent && !confirm(`Could not check latest cloud data before saving: ${error.message}\n\nSave this device data anyway?`)) return;
+  }
   data.settings.lastCloudSavedAt = saveStamp;
+  data.settings.lastCloudSavedByDevice = localDeviceId();
   localStorage.setItem(storeKey, JSON.stringify(data));
   updateCloudStatus("Saving...", "saving");
 
@@ -2757,6 +2938,7 @@ function syncWeeklySlotControlDates() {
   if ($("#weeklySlotDate") && !$("#weeklySlotDate").value) $("#weeklySlotDate").value = selectedWeekStart;
   if ($("#weeklySlotFrom") && !$("#weeklySlotFrom").value) $("#weeklySlotFrom").value = selectedWeekStart;
   if ($("#weeklySlotTo") && !$("#weeklySlotTo").value) $("#weeklySlotTo").value = weekEnd;
+  syncWeeklyViewControls();
 }
 
 function resetWeeklySlotControlDates() {
@@ -2764,6 +2946,39 @@ function resetWeeklySlotControlDates() {
   if ($("#weeklySlotDate")) $("#weeklySlotDate").value = selectedWeekStart;
   if ($("#weeklySlotFrom")) $("#weeklySlotFrom").value = selectedWeekStart;
   if ($("#weeklySlotTo")) $("#weeklySlotTo").value = weekEnd;
+  if (weeklyScheduleMode === "week") {
+    weeklyViewFrom = selectedWeekStart;
+    weeklyViewTo = weekEnd;
+  }
+  syncWeeklyViewControls();
+}
+
+function syncWeeklyViewControls() {
+  if ($("#weeklyScheduleMode")) $("#weeklyScheduleMode").value = weeklyScheduleMode;
+  if ($("#weeklyViewFrom")) $("#weeklyViewFrom").value = weeklyViewFrom || selectedWeekStart;
+  if ($("#weeklyViewTo")) $("#weeklyViewTo").value = weeklyViewTo || addDays(selectedWeekStart, 6);
+  document.body.classList.toggle("weekly-custom-view", weeklyScheduleMode === "custom");
+}
+
+function weeklyViewDates() {
+  if (weeklyScheduleMode === "custom") {
+    const from = $("#weeklyViewFrom")?.value || weeklyViewFrom || selectedWeekStart;
+    const to = $("#weeklyViewTo")?.value || weeklyViewTo || addDays(selectedWeekStart, 6);
+    const dates = datesBetween(from, to);
+    if (dates.length) {
+      weeklyViewFrom = from;
+      weeklyViewTo = to;
+      return dates;
+    }
+    alert("Please select a valid custom date range.");
+  }
+  weeklyViewFrom = selectedWeekStart;
+  weeklyViewTo = addDays(selectedWeekStart, 6);
+  const selectedDays = selectedValues($("#dayFilter"));
+  const activeDays = selectedDays.length ? selectedDays : ["All"];
+  return activeDays.includes("All")
+    ? Array.from({ length: 7 }, (_, index) => addDays(selectedWeekStart, index))
+    : activeDays.map((day) => addDays(selectedWeekStart, Number(day)));
 }
 
 function weeklySlotScopeDates() {
@@ -2808,6 +3023,15 @@ function askWeeklySlotAddDates(date) {
   if (answer === null) return [];
   if (answer.trim() === "2") return allWeekDates.length ? allWeekDates : dayDates;
   return dayDates;
+}
+
+function askWeeklySlotAddDatesForScope() {
+  const scope = $("#weeklySlotScope")?.value || "specific";
+  if (scope === "specific") return askWeeklySlotAddDates($("#weeklySlotDate")?.value || selectedWeekStart);
+  const dates = weeklySlotScopeDates();
+  if (!dates.length) return [];
+  const label = scope === "week" ? "this week" : "the selected date range";
+  return confirm(`Add this time slot to ${label} (${dates[0]} to ${dates[dates.length - 1]})?`) ? dates : [];
 }
 
 function addTimeSlotToDate(date, start, end) {
@@ -5457,14 +5681,11 @@ function deleteTimeSlotWithConfirmation(date, start, end) {
 
 function renderWeeklyTable() {
   $("#weekStart").value = selectedWeekStart;
+  syncWeeklyViewControls();
   if ($("#weeklySlotDate")) $("#weeklySlotDate").value = $("#weeklySlotDate").value || selectedWeekStart;
   if ($("#weeklySlotFrom")) $("#weeklySlotFrom").value = $("#weeklySlotFrom").value || selectedWeekStart;
   if ($("#weeklySlotTo")) $("#weeklySlotTo").value = $("#weeklySlotTo").value || addDays(selectedWeekStart, 6);
-  const selectedDays = selectedValues($("#dayFilter"));
-  const activeDays = selectedDays.length ? selectedDays : ["All"];
-  const dates = activeDays.includes("All")
-    ? Array.from({ length: 7 }, (_, index) => addDays(selectedWeekStart, index))
-    : activeDays.map((day) => addDays(selectedWeekStart, Number(day)));
+  const dates = weeklyViewDates();
   const visibleBatches = filteredBatches();
   const selectedTimeSlots = selectedValues($("#timeSlotFilter"));
   const activeTimeSlots = selectedTimeSlots.length ? selectedTimeSlots : ["All"];
@@ -5549,7 +5770,7 @@ function renderWeeklyTable() {
   });
   $("#weeklyTable").innerHTML = weeklyRows.length
     ? weeklyRows.join("")
-    : `<tr><td colspan="${visibleBatches.length + 2}" class="empty">No lecture slots found for this week. Add a time slot only when you want to plan a lecture.</td></tr>`;
+    : `<tr><td colspan="${visibleBatches.length + 2}" class="empty">No lecture slots found for this schedule. Add a time slot only when you want to plan a lecture.</td></tr>`;
 }
 
 function addSlot(event) {
@@ -5579,8 +5800,7 @@ function addWeeklyRow() {
     alert("Please enter valid Time In and Time Out, e.g. 7am and 10am.");
     return;
   }
-  const baseDate = $("#weeklySlotDate")?.value || selectedWeekStart;
-  const dates = askWeeklySlotAddDates(baseDate);
+  const dates = askWeeklySlotAddDatesForScope();
   if (!dates.length) return;
   let added = 0;
   dates.forEach((date) => {
@@ -5592,6 +5812,43 @@ function addWeeklyRow() {
   }
   renderFilters();
   saveData();
+}
+
+function applyWeeklyScheduleView() {
+  weeklyScheduleMode = $("#weeklyScheduleMode")?.value || "week";
+  if (weeklyScheduleMode === "custom") {
+    const from = $("#weeklyViewFrom")?.value || weeklyViewFrom || selectedWeekStart;
+    const to = $("#weeklyViewTo")?.value || weeklyViewTo || addDays(selectedWeekStart, 6);
+    if (!datesBetween(from, to).length) {
+      alert("Please select a valid custom From and To date.");
+      return;
+    }
+    weeklyViewFrom = from;
+    weeklyViewTo = to;
+  } else {
+    weeklyViewFrom = selectedWeekStart;
+    weeklyViewTo = addDays(selectedWeekStart, 6);
+  }
+  syncWeeklyViewControls();
+  renderWeeklyTable();
+}
+
+function shiftWeeklySchedule(direction) {
+  if (weeklyScheduleMode === "custom") {
+    const dates = datesBetween(weeklyViewFrom, weeklyViewTo);
+    const shiftBy = Math.max(1, dates.length) * direction;
+    weeklyViewFrom = addDays(weeklyViewFrom || selectedWeekStart, shiftBy);
+    weeklyViewTo = addDays(weeklyViewTo || addDays(selectedWeekStart, 6), shiftBy);
+    syncWeeklyViewControls();
+    renderWeeklyTable();
+    return;
+  }
+  selectedWeekStart = addDays(selectedWeekStart, 7 * direction);
+  if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
+  resetWeeklySlotControlDates();
+  renderWeeklyTable();
+  renderProfessorPlanning();
+  renderProfessorLogin();
 }
 
 function parseCsvRows(text) {
@@ -8031,6 +8288,7 @@ function bindEvents() {
     renderChangesTTPreview();
   });
   $("#weekStart").addEventListener("change", (event) => {
+    weeklyScheduleMode = "week";
     selectedWeekStart = formatDateInput(getFriday(new Date(`${event.target.value}T00:00:00`)));
     if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
     resetWeeklySlotControlDates();
@@ -8038,21 +8296,21 @@ function bindEvents() {
     renderProfessorPlanning();
     renderProfessorLogin();
   });
+  $("#weeklyScheduleMode")?.addEventListener("change", applyWeeklyScheduleView);
+  $("#weeklyViewFrom")?.addEventListener("change", () => {
+    weeklyScheduleMode = "custom";
+    applyWeeklyScheduleView();
+  });
+  $("#weeklyViewTo")?.addEventListener("change", () => {
+    weeklyScheduleMode = "custom";
+    applyWeeklyScheduleView();
+  });
+  $("#applyWeeklyViewBtn")?.addEventListener("click", applyWeeklyScheduleView);
   $("#prevWeekBtn").addEventListener("click", () => {
-    selectedWeekStart = addDays(selectedWeekStart, -7);
-    if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
-    resetWeeklySlotControlDates();
-    renderWeeklyTable();
-    renderProfessorPlanning();
-    renderProfessorLogin();
+    shiftWeeklySchedule(-1);
   });
   $("#nextWeekBtn").addEventListener("click", () => {
-    selectedWeekStart = addDays(selectedWeekStart, 7);
-    if ($("#professorPlanWeek")) $("#professorPlanWeek").value = selectedWeekStart;
-    resetWeeklySlotControlDates();
-    renderWeeklyTable();
-    renderProfessorPlanning();
-    renderProfessorLogin();
+    shiftWeeklySchedule(1);
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeProfessorWeeklyPreview();

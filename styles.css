@@ -1003,12 +1003,53 @@ textarea {
   align-items: end;
   gap: 8px;
   flex: 1 1 auto;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 .weekly-tools label {
   min-width: 132px;
+}
+
+.weekly-view-tools {
+  display: grid;
+  grid-template-columns: auto 142px 132px 118px 118px auto auto;
+  align-items: end;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #cfe0ea;
+  border-radius: 8px;
+  background: rgba(246, 251, 254, 0.86);
+}
+
+.weekly-view-tools label {
+  min-width: 0;
+  color: #40566a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.weekly-view-tools input,
+.weekly-view-tools select {
+  width: 100%;
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.weekly-view-tools button {
+  min-height: 28px;
+  height: 28px;
+  padding: 4px 10px;
+}
+
+body:not(.weekly-custom-view) .custom-view-field {
+  display: none;
+}
+
+body:not(.weekly-custom-view) .weekly-view-tools {
+  grid-template-columns: auto 142px 132px auto auto;
 }
 
 .weekly-tools .sheet-link-field {
@@ -3304,5 +3345,11 @@ th {
 
   .slot-range-tools {
     grid-template-columns: repeat(2, minmax(92px, 1fr));
+  }
+
+  .weekly-view-tools,
+  body:not(.weekly-custom-view) .weekly-view-tools {
+    grid-template-columns: repeat(2, minmax(92px, 1fr));
+    width: 100%;
   }
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260707-weekly-slot-cleanup">
+    <link rel="stylesheet" href="styles.css?v=20260707-weekly-custom-view">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -193,12 +193,30 @@
               <span>Edit date, time, batch, professor, and subject in one view.</span>
             </div>
             <div class="weekly-tools">
-              <button class="ghost" id="prevWeekBtn" type="button">Previous</button>
-              <label>
-                Week Starting
-                <input id="weekStart" type="date">
-              </label>
-              <button class="ghost" id="nextWeekBtn" type="button">Next</button>
+              <div class="weekly-view-tools" aria-label="Weekly timetable view range">
+                <button class="ghost" id="prevWeekBtn" type="button">Previous</button>
+                <label>
+                  View
+                  <select id="weeklyScheduleMode">
+                    <option value="week">Weekly Schedule</option>
+                    <option value="custom">Custom Dates</option>
+                  </select>
+                </label>
+                <label>
+                  Week Starting
+                  <input id="weekStart" type="date">
+                </label>
+                <label class="custom-view-field">
+                  From
+                  <input id="weeklyViewFrom" type="date">
+                </label>
+                <label class="custom-view-field">
+                  To
+                  <input id="weeklyViewTo" type="date">
+                </label>
+                <button class="ghost" id="applyWeeklyViewBtn" type="button">Show</button>
+                <button class="ghost" id="nextWeekBtn" type="button">Next</button>
+              </div>
               <label class="column-size-field">
                 Column Size
                 <input id="weeklyColumnSize" type="range" min="130" max="280" step="10">
@@ -211,7 +229,7 @@
                 <input id="importFullSheetToggle" type="checkbox">
                 Full sheet
               </label>
-              <div class="slot-range-tools" aria-label="Add or move weekly time slot">
+              <div class="slot-range-tools" aria-label="Add weekly time slot">
                 <label>
                   Time In
                   <input id="weeklySlotStart" type="text" placeholder="7am">
@@ -221,11 +239,11 @@
                   <input id="weeklySlotEnd" type="text" placeholder="10am">
                 </label>
                 <label>
-                  Apply
+                  Add On
                   <select id="weeklySlotScope">
-                    <option value="specific">This Date</option>
-                    <option value="week">All Days</option>
-                    <option value="range">Date Range</option>
+                    <option value="specific">Selected Date</option>
+                    <option value="week">This Week</option>
+                    <option value="range">Custom Range</option>
                   </select>
                 </label>
                 <label>
@@ -918,6 +936,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260707-weekly-slot-cleanup"></script>
+    <script src="app.js?v=20260707-weekly-custom-view"></script>
   </body>
 </html>
