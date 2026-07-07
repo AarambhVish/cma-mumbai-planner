@@ -2889,6 +2889,30 @@ function timeSlotEverHasProgramEntry(start, end) {
   );
 }
 
+function weekdayIndex(dateText) {
+  return new Date(`${dateText}T00:00:00`).getDay();
+}
+
+function historicalProgramTimeSlotsForDate(date) {
+  const sameWeekday = new Map();
+  const earlierAnyDay = new Map();
+  const anyPlanned = new Map();
+  const targetWeekday = weekdayIndex(date);
+  data.slots
+    .filter((slot) => batchProgram(batchById(slot.batchId)) === activeProgram())
+    .filter(slotHasTimetableEntry)
+    .forEach((slot) => {
+      if (!slot.start || !slot.end) return;
+      const key = `${slot.start}|${slot.end}`;
+      const value = { start: slot.start, end: slot.end };
+      anyPlanned.set(key, value);
+      if (slot.date < date) earlierAnyDay.set(key, value);
+      if (slot.date < date && weekdayIndex(slot.date) === targetWeekday) sameWeekday.set(key, value);
+    });
+  const slots = sameWeekday.size ? sameWeekday : earlierAnyDay.size ? earlierAnyDay : anyPlanned;
+  return Array.from(slots.values()).sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+}
+
 function explicitTimeSlotsForDate(date) {
   const slots = data.dateTimeSlots?.[date] || [];
   return slots.map((slot) => ({ start: slot.start, end: slot.end, manual: Boolean(slot.manual) })).sort((a, b) => a.start.localeCompare(b.start));
@@ -2896,6 +2920,9 @@ function explicitTimeSlotsForDate(date) {
 
 function boardTimeSlotsForDate(date, activeTimeSlots = ["All"]) {
   const slotMap = new Map();
+  historicalProgramTimeSlotsForDate(date).forEach((slot) => {
+    slotMap.set(`${slot.start}|${slot.end}`, { start: slot.start, end: slot.end });
+  });
   explicitTimeSlotsForDate(date)
     .filter((slot) => slot.manual)
     .forEach((slot) => {
