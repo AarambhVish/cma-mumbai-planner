@@ -1914,33 +1914,6 @@ tr:last-child td {
   white-space: nowrap;
 }
 
-.occupied-chip {
-  display: grid;
-  gap: 2px;
-  max-width: 260px;
-  margin: 2px 0 5px;
-  padding: 5px 8px;
-  border: 1px solid #f0b4ba;
-  border-radius: 6px;
-  background: #fff1f2;
-  color: #9f1239;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.occupied-chip strong {
-  color: #7f1d1d;
-  font-size: 10px;
-}
-
-.time-slot-occupied-list {
-  min-width: 190px;
-  max-width: 280px;
-  vertical-align: top;
-}
-
 .time-slot-gap-list {
   min-width: 180px;
   max-width: 280px;

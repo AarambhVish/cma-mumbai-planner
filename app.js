@@ -3427,7 +3427,6 @@ function renderTimeSlotPlanner() {
       <th>Date</th>
       <th>Location</th>
       <th>Room No</th>
-      <th>Occupied Batch</th>
       <th>Free Gaps for CMA</th>
       ${hourColumns.map((hour) => `<th class="timeline-hour">${escapeHtml(hourColumnLabel(hour))}</th>`).join("")}
       <th>Total Free Hrs</th>
@@ -3443,12 +3442,11 @@ function renderTimeSlotPlanner() {
       ${index === 0 ? `<td class="time-slot-date-block" rowspan="${rows.length}"><strong>${escapeHtml(dayLabel(date))}</strong><br><span class="muted">${escapeHtml(date)}</span></td>` : ""}
       <td><strong>${escapeHtml(row.centre)}</strong></td>
       <td>${escapeHtml(row.room)}</td>
-      <td class="time-slot-occupied-list">${occupiedListHtml(row.occupied)}</td>
       <td class="time-slot-gap-list">${freeGapListHtml(row)}</td>
       ${hourColumns.map((hour) => timelineCellHtml(row, hour)).join("")}
       <td><strong>${row.hours.toFixed(1)}</strong></td>
     </tr>
-  `).join("")).join("") : `<tr><td colspan="${hourColumns.length + 6}" class="empty">${bookings.length ? "No room-day rows found for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
+  `).join("")).join("") : `<tr><td colspan="${hourColumns.length + 5}" class="empty">${bookings.length ? "No room-day rows found for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
 }
 
 function minutes(time) {
@@ -6181,7 +6179,7 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
         if (parseRoomTimeRange(nextCell)) break;
         if (nextCell) detailLines.push(nextCell);
       }
-      const details = [...new Set(detailLines)].join(" | ") || "Room Blocking";
+      const details = roomLectureNameFromLines(detailLines) || "Room Blocking";
       bookings.push({
         id: uid("room"),
         source: sourceName,
@@ -6190,7 +6188,7 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
         date,
         start: range.start,
         end: range.end,
-        batchName: roomBatchNameFromText(details),
+        lectureName: details,
         details,
         importedAt: new Date().toISOString()
       });
@@ -6292,55 +6290,15 @@ function freeSlotChip(slot) {
   return `<span class="gap-chip">${escapeHtml(formatTimeShort(slot.start))} - ${escapeHtml(formatTimeShort(slot.end))}</span>`;
 }
 
-function isProfessorLikeRoomText(text) {
-  return /\b(prof\.?|sir|miss|madam|faculty|teacher)\b/i.test(cleanSheetText(text));
+function roomLectureNameFromLines(lines) {
+  return (lines || []).map(cleanSheetText).filter(Boolean).pop() || "";
 }
 
-function isCourseBatchLikeRoomText(text) {
-  const value = cleanSheetText(text);
-  return /\b(CMA|CMAI|CMAF|CMAFC|CA|CS|ACCA|CPA|FRM|CFA)\b/i.test(value) ||
-    /\b(?:In|Inter|Final|Foundation|Fo|Fnd|CA|CS|CMA|ACCA)[A-Za-z]*[JSND]\d{2}[A-Za-z]{2,}\b/i.test(value) ||
-    /\b(?:CA|CS|CMA|ACCA)[A-Za-z]{2,}\d{2}[A-Za-z]{2,}\b/i.test(value);
-}
-
-function roomBatchNameFromText(text) {
-  const cleaned = cleanSheetText(text)
-    .replace(/\b(no lecture|room blocking|lecture|batch|subject|professor|faculty)\b/gi, " ")
-    .trim();
-  const lines = cleaned.split(/\s+\|\s+|[,;]+/).map(cleanSheetText).filter(Boolean);
-  const coursePatterns = [
-    /\bCMA(?:\s+(?:FINAL|USA|INDIA|INTER|FOUNDATION|FOUNDATION COURSE|I|F|FC)|[A-Z])[\w\s/&().-]{0,80}/i,
-    /\bACCA[\w\s/&().-]{0,80}/i,
-    /\b(?:final|inter|foundation)\s+(?:CA|CS|CMA|ACCA)\s*-?\s*[\w\s/&().-]{0,60}/i,
-    /\bCA\s+(?:FOUNDATION|INTER|FINAL|CPT|IPCC|ARTICLESHIP|REGULAR|REVISION|FAST TRACK|CRASH)[\w\s/&().-]{0,70}/i,
-    /\bCS\s+(?:FOUNDATION|EXECUTIVE|PROFESSIONAL|REGULAR|REVISION|FAST TRACK|CRASH)[\w\s/&().-]{0,70}/i,
-    /\b(?:In|Inter|Final|Foundation|Fo|Fnd|CA|CS|CMA|ACCA)[A-Za-z]*[JSND]\d{2}[A-Za-z]{2,}\b/i,
-    /\b(?:CA|CS|CMA|ACCA)[A-Za-z]{2,}\d{2}[A-Za-z]{2,}\b/i,
-    /\b(?:CA|CS|CPA|FRM|CFA)\b[\w\s/&().-]{0,55}/i
-  ];
-  for (const source of [cleaned, ...lines]) {
-    if (isProfessorLikeRoomText(source)) continue;
-    const match = coursePatterns.map((pattern) => source.match(pattern)).find(Boolean);
-    if (match) return cleanSheetText(match[0]).replace(/\s+\|\s+.*/, "");
-  }
-  return "";
-}
-
-function roomBookingBatchName(booking) {
-  const stored = cleanSheetText(booking.batchName);
-  if (stored && isCourseBatchLikeRoomText(stored) && !isProfessorLikeRoomText(stored)) return stored;
-  return roomBatchNameFromText(booking.details || "") || "Occupied";
-}
-
-function occupiedBookingChip(booking) {
-  const label = roomBookingBatchName(booking);
-  const details = booking.details && booking.details !== label ? ` | ${booking.details}` : "";
-  return `<span class="occupied-chip" title="${escapeHtml(`${formatTimeRange(booking.start, booking.end)} ${details || label}`)}"><strong>${escapeHtml(formatTimeRange(booking.start, booking.end))}</strong>${escapeHtml(label)}</span>`;
-}
-
-function occupiedListHtml(bookings) {
-  const occupied = (bookings || []).filter((booking) => !booking.openMarker);
-  return occupied.length ? occupied.map(occupiedBookingChip).join("") : `<span class="muted">No occupied batch</span>`;
+function roomBookingLectureName(booking) {
+  const stored = cleanSheetText(booking.lectureName);
+  if (stored) return stored;
+  const detailLines = cleanSheetText(booking.details || "").split(/\s+\|\s+/).map(cleanSheetText).filter(Boolean);
+  return roomLectureNameFromLines(detailLines) || "Occupied";
 }
 
 function freeGapListHtml(row) {
@@ -6407,7 +6365,7 @@ function bookingCoversHour(booking, hour) {
 function timelineCellHtml(row, hour) {
   const booking = row.occupied.find((item) => bookingCoversHour(item, hour));
   if (booking) {
-    const label = roomBookingBatchName(booking);
+    const label = roomBookingLectureName(booking);
     return `<td class="timeline-cell occupied" title="${escapeHtml(`${row.room} occupied ${formatTimeRange(booking.start, booking.end)} - ${label}`)}">${escapeHtml(label)}</td>`;
   }
   const slot = [...row.morning, ...row.afternoon, ...row.evening].find((item) => freeSlotCoversHour(item, hour));
