@@ -1238,6 +1238,7 @@ function ensureDataShape() {
   if (!Array.isArray(data.notifications)) data.notifications = [];
   if (!Array.isArray(data.roomBookings)) data.roomBookings = [];
   if (!data.syllabusCompletion || typeof data.syllabusCompletion !== "object" || Array.isArray(data.syllabusCompletion)) data.syllabusCompletion = {};
+  recoverSyllabusCompletionFromBackups();
   if (!data.dateTimeSlots || typeof data.dateTimeSlots !== "object" || Array.isArray(data.dateTimeSlots)) data.dateTimeSlots = {};
   defaultData.centres.forEach((centre) => {
     if (!data.centres.includes(centre)) data.centres.push(centre);
@@ -1812,6 +1813,7 @@ function isOldAutoProfessorPassword(professor) {
 
 const cloudDeviceKey = `${storeKey}-device-id`;
 const cloudBackupKey = `${storeKey}-cloud-backups`;
+const syllabusBackupKey = `${storeKey}-syllabus-backups`;
 const mergeArrayKeys = ["slots", "progress", "topicPlans", "actualLectures", "notifications", "roomBookings"];
 
 function localDeviceId() {
@@ -1894,6 +1896,73 @@ function keepCloudBackup(label, snapshot) {
   }
 }
 
+function syllabusCompletionCount(completion = {}) {
+  return Object.values(completion || {}).filter((value) => {
+    if (!value) return false;
+    if (value === true) return true;
+    if (typeof value === "object") return value.done !== false;
+    return Boolean(value);
+  }).length;
+}
+
+function keepSyllabusBackup(label, snapshot) {
+  try {
+    const completion = snapshot?.syllabusCompletion;
+    if (!completion || syllabusCompletionCount(completion) === 0) return;
+    const backups = JSON.parse(localStorage.getItem(syllabusBackupKey) || "[]");
+    backups.unshift({
+      label,
+      savedAt: new Date().toISOString(),
+      syllabusCompletion: structuredClone(completion)
+    });
+    localStorage.setItem(syllabusBackupKey, JSON.stringify(backups.slice(0, 20)));
+  } catch {
+    // Syllabus backup is best-effort and must never block normal saving.
+  }
+}
+
+function syllabusBackupsFromStorage() {
+  const candidates = [];
+  try {
+    JSON.parse(localStorage.getItem(syllabusBackupKey) || "[]").forEach((backup) => {
+      if (backup?.syllabusCompletion) candidates.push({
+        label: backup.label || "syllabus-backup",
+        savedAt: backup.savedAt || "",
+        completion: backup.syllabusCompletion
+      });
+    });
+  } catch {
+    // Ignore damaged backup list.
+  }
+  try {
+    JSON.parse(localStorage.getItem(cloudBackupKey) || "[]").forEach((backup) => {
+      if (backup?.data?.syllabusCompletion) candidates.push({
+        label: backup.label || "cloud-backup",
+        savedAt: backup.savedAt || "",
+        completion: backup.data.syllabusCompletion
+      });
+    });
+  } catch {
+    // Ignore damaged cloud backup list.
+  }
+  return candidates
+    .map((backup) => ({ ...backup, count: syllabusCompletionCount(backup.completion) }))
+    .filter((backup) => backup.count > 0)
+    .sort((a, b) => b.count - a.count || String(b.savedAt).localeCompare(String(a.savedAt)));
+}
+
+function bestSyllabusBackup() {
+  return syllabusBackupsFromStorage()[0] || null;
+}
+
+function recoverSyllabusCompletionFromBackups(options = {}) {
+  if (syllabusCompletionCount(data.syllabusCompletion) > 0 && !options.force) return false;
+  const backup = bestSyllabusBackup();
+  if (!backup) return false;
+  data.syllabusCompletion = mergeSyllabusCompletion(data.syllabusCompletion, backup.completion);
+  return true;
+}
+
 function recordUpdatedAt(record) {
   return record?._updatedAt || record?.updatedAt || record?.dateUpdated || "";
 }
@@ -1974,7 +2043,12 @@ function mergeCloudSafeData(localData, cloudData) {
 
 function saveData(options = {}) {
   const previousData = localStoredData();
+  keepSyllabusBackup("before-save", previousData);
+  if (syllabusCompletionCount(data.syllabusCompletion) === 0 && syllabusCompletionCount(previousData?.syllabusCompletion) > 0 && !options.allowEmptySyllabus) {
+    data.syllabusCompletion = mergeSyllabusCompletion(data.syllabusCompletion, previousData.syllabusCompletion);
+  }
   if (!options.skipStamp) stampChangedRecords(previousData, data);
+  keepSyllabusBackup("after-save", data);
   localStorage.setItem(storeKey, JSON.stringify(data));
   if (!options.skipRender) render();
   if (!options.skipCloudSave) scheduleCloudAutoSave();
@@ -2586,6 +2660,8 @@ async function saveCloudData(options = {}) {
   }
   data.settings.lastCloudSavedAt = saveStamp;
   data.settings.lastCloudSavedByDevice = localDeviceId();
+  keepSyllabusBackup("before-cloud-save-write", localStoredData());
+  if (syllabusCompletionCount(data.syllabusCompletion) === 0) recoverSyllabusCompletionFromBackups();
   localStorage.setItem(storeKey, JSON.stringify(data));
   updateCloudStatus("Saving...", "saving");
 
@@ -3414,14 +3490,6 @@ function renderTimeSlotPlanner() {
   const freeSlots = availableRoomSlots(bookings, filters);
   const matrixRows = timeSlotMatrixRows(freeSlots, filteredBookings);
   const hourColumns = timeSlotHourColumns();
-  const occupiedCount = filteredBookings.filter((booking) => !booking.openMarker).length;
-  $("#timeSlotSummary").innerHTML = [
-    ["Locations", centres.length],
-    ["Rooms", rooms.length],
-    ["Occupied Slots", occupiedCount],
-    ["Rows With Gaps", matrixRows.filter((row) => row.hours > 0).length],
-    ["Minimum Gap", `${Number(filters.minHours || 3).toFixed(1)} hrs`]
-  ].map(([label, value]) => `<div class="time-slot-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
   $("#timeSlotAvailableHead").innerHTML = `
     <tr>
       <th>Date</th>
@@ -8190,6 +8258,19 @@ function handleSyllabusProfessorChange(event) {
   if (isProfessorMode() && cloudSyncUrl()) saveCloudData({ silent: true });
 }
 
+function recoverSyllabusCompletion() {
+  const before = syllabusCompletionCount(data.syllabusCompletion);
+  const backup = bestSyllabusBackup();
+  if (!backup) {
+    alert("No syllabus backup found on this browser yet.");
+    return;
+  }
+  data.syllabusCompletion = mergeSyllabusCompletion(data.syllabusCompletion, backup.completion);
+  const after = syllabusCompletionCount(data.syllabusCompletion);
+  saveData({ skipCloudSave: isProfessorMode() });
+  alert(`Syllabus recovery complete. Restored/kept ${after} completed topics${after > before ? ` (${after - before} added)` : ""}.`);
+}
+
 function bindEvents() {
   document.addEventListener("click", (event) => {
     const button = event.target.closest("button, .file-trigger");
@@ -8236,6 +8317,7 @@ function bindEvents() {
   $("#professorHeadSyllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
   $("#syllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
   $("#professorHeadSyllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
+  $("#recoverSyllabusBtn")?.addEventListener("click", recoverSyllabusCompletion);
   $("#alertTypeFilter")?.addEventListener("change", () => renderAlerts([]));
   $("#alertSummaryBoxes")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-alert-box]");
