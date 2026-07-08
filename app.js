@@ -6297,7 +6297,10 @@ function isProfessorLikeRoomText(text) {
 }
 
 function isCourseBatchLikeRoomText(text) {
-  return /\b(CMA|CMAI|CMAF|CMAFC|CA|CS|ACCA|CPA|FRM|CFA)\b/i.test(cleanSheetText(text));
+  const value = cleanSheetText(text);
+  return /\b(CMA|CMAI|CMAF|CMAFC|CA|CS|ACCA|CPA|FRM|CFA)\b/i.test(value) ||
+    /\b(?:In|Inter|Final|Foundation|Fo|Fnd|CA|CS|CMA|ACCA)[A-Za-z]*[JSND]\d{2}[A-Za-z]{2,}\b/i.test(value) ||
+    /\b(?:CA|CS|CMA|ACCA)[A-Za-z]{2,}\d{2}[A-Za-z]{2,}\b/i.test(value);
 }
 
 function roomBatchNameFromText(text) {
@@ -6308,8 +6311,11 @@ function roomBatchNameFromText(text) {
   const coursePatterns = [
     /\bCMA(?:\s+(?:FINAL|USA|INDIA|INTER|FOUNDATION|FOUNDATION COURSE|I|F|FC)|[A-Z])[\w\s/&().-]{0,80}/i,
     /\bACCA[\w\s/&().-]{0,80}/i,
+    /\b(?:final|inter|foundation)\s+(?:CA|CS|CMA|ACCA)\s*-?\s*[\w\s/&().-]{0,60}/i,
     /\bCA\s+(?:FOUNDATION|INTER|FINAL|CPT|IPCC|ARTICLESHIP|REGULAR|REVISION|FAST TRACK|CRASH)[\w\s/&().-]{0,70}/i,
     /\bCS\s+(?:FOUNDATION|EXECUTIVE|PROFESSIONAL|REGULAR|REVISION|FAST TRACK|CRASH)[\w\s/&().-]{0,70}/i,
+    /\b(?:In|Inter|Final|Foundation|Fo|Fnd|CA|CS|CMA|ACCA)[A-Za-z]*[JSND]\d{2}[A-Za-z]{2,}\b/i,
+    /\b(?:CA|CS|CMA|ACCA)[A-Za-z]{2,}\d{2}[A-Za-z]{2,}\b/i,
     /\b(?:CA|CS|CPA|FRM|CFA)\b[\w\s/&().-]{0,55}/i
   ];
   for (const source of [cleaned, ...lines]) {
