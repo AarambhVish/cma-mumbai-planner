@@ -1899,6 +1899,19 @@ tr:last-child td {
   padding: 0 14px 14px;
 }
 
+#timeSlotView .table-wrap {
+  max-height: 72vh;
+  overflow: auto;
+}
+
+#timeSlotAvailableHead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #dbe9f2;
+  box-shadow: inset 0 -2px 0 #0d2d3a;
+}
+
 .gap-chip {
   display: inline-flex;
   align-items: center;

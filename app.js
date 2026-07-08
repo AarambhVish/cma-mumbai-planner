@@ -3385,7 +3385,7 @@ function renderAlerts(metrics) {
 
 function renderTimeSlotPlanner() {
   if (!$("#timeSlotAvailableTable")) return;
-  const bookings = data.roomBookings || [];
+  const bookings = (data.roomBookings || []).filter((booking) => !isDoNotUseRoom(booking.room));
   const centres = [...new Set(bookings.map((booking) => booking.centre).filter(Boolean))].sort();
   const centreSelect = $("#timeSlotCentreFilter");
   const selectedCentre = centreSelect?.value || "All";
@@ -6133,6 +6133,15 @@ function isRoomName(value) {
   return /\broom\b/i.test(cleanSheetText(value));
 }
 
+function isDoNotUseRoom(value) {
+  const text = cleanSheetText(value);
+  const compact = text.toLowerCase().replace(/[^a-z]/g, "");
+  return /\b(do\s*not\s*use|don'?t\s*use|not\s*to\s*use)\b/i.test(text) ||
+    compact.includes("donotuse") ||
+    compact.includes("dontuse") ||
+    compact.includes("nottouse");
+}
+
 function loadXlsxLibrary() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
   return new Promise((resolve, reject) => {
@@ -6164,6 +6173,10 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
   rows.forEach((row, rowIndex) => {
     const first = cleanSheetText(row[0]);
     if (isRoomName(first)) {
+      if (isDoNotUseRoom(first)) {
+        currentRoom = "";
+        return;
+      }
       currentRoom = first;
       roomNames.add(currentRoom);
     }
@@ -6213,7 +6226,7 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
       }
     });
   });
-  return bookings;
+  return bookings.filter((booking) => !isDoNotUseRoom(booking.room));
 }
 
 function roomBookingCourseText(booking) {
