@@ -6292,16 +6292,38 @@ function freeSlotChip(slot) {
   return `<span class="gap-chip">${escapeHtml(formatTimeShort(slot.start))} - ${escapeHtml(formatTimeShort(slot.end))}</span>`;
 }
 
+function isProfessorLikeRoomText(text) {
+  return /\b(prof\.?|sir|miss|madam|faculty|teacher)\b/i.test(cleanSheetText(text));
+}
+
+function isCourseBatchLikeRoomText(text) {
+  return /\b(CMA|CMAI|CMAF|CMAFC|CA|CS|ACCA|CPA|FRM|CFA)\b/i.test(cleanSheetText(text));
+}
+
 function roomBatchNameFromText(text) {
-  const cleaned = cleanSheetText(text).replace(/\b(no lecture|room blocking|lecture|batch)\b/gi, " ").trim();
-  const cmaMatch = cleaned.match(/\bCMA(?:\s+(?:FINAL|USA|INDIA|I|F|FC)|[A-Z])[\w\s/&().-]{4,80}/i);
-  if (cmaMatch) return cleanSheetText(cmaMatch[0]).replace(/\s+\|\s+.*/, "");
-  const lines = cleaned.split(/\s+\|\s+/).map(cleanSheetText).filter(Boolean);
-  return lines.find((line) => !parseRoomTimeRange(line) && !/^(prof|sir|miss|subject)$/i.test(line)) || "";
+  const cleaned = cleanSheetText(text)
+    .replace(/\b(no lecture|room blocking|lecture|batch|subject|professor|faculty)\b/gi, " ")
+    .trim();
+  const lines = cleaned.split(/\s+\|\s+|[,;]+/).map(cleanSheetText).filter(Boolean);
+  const coursePatterns = [
+    /\bCMA(?:\s+(?:FINAL|USA|INDIA|INTER|FOUNDATION|FOUNDATION COURSE|I|F|FC)|[A-Z])[\w\s/&().-]{0,80}/i,
+    /\bACCA[\w\s/&().-]{0,80}/i,
+    /\bCA\s+(?:FOUNDATION|INTER|FINAL|CPT|IPCC|ARTICLESHIP|REGULAR|REVISION|FAST TRACK|CRASH)[\w\s/&().-]{0,70}/i,
+    /\bCS\s+(?:FOUNDATION|EXECUTIVE|PROFESSIONAL|REGULAR|REVISION|FAST TRACK|CRASH)[\w\s/&().-]{0,70}/i,
+    /\b(?:CA|CS|CPA|FRM|CFA)\b[\w\s/&().-]{0,55}/i
+  ];
+  for (const source of [cleaned, ...lines]) {
+    if (isProfessorLikeRoomText(source)) continue;
+    const match = coursePatterns.map((pattern) => source.match(pattern)).find(Boolean);
+    if (match) return cleanSheetText(match[0]).replace(/\s+\|\s+.*/, "");
+  }
+  return "";
 }
 
 function roomBookingBatchName(booking) {
-  return cleanSheetText(booking.batchName) || roomBatchNameFromText(booking.details || "") || "Occupied";
+  const stored = cleanSheetText(booking.batchName);
+  if (stored && isCourseBatchLikeRoomText(stored) && !isProfessorLikeRoomText(stored)) return stored;
+  return roomBatchNameFromText(booking.details || "") || "Occupied";
 }
 
 function occupiedBookingChip(booking) {
