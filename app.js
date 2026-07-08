@@ -3410,13 +3410,16 @@ function renderTimeSlotPlanner() {
     to: toInput?.value || "",
     minHours: $("#timeSlotMinHours")?.value || "3"
   };
+  const filteredBookings = roomBookingsForFilters(bookings, filters);
   const freeSlots = availableRoomSlots(bookings, filters);
-  const matrixRows = timeSlotMatrixRows(freeSlots);
+  const matrixRows = timeSlotMatrixRows(freeSlots, filteredBookings);
   const hourColumns = timeSlotHourColumns();
+  const occupiedCount = filteredBookings.filter((booking) => !booking.openMarker).length;
   $("#timeSlotSummary").innerHTML = [
     ["Locations", centres.length],
     ["Rooms", rooms.length],
-    ["Available Rows", matrixRows.length],
+    ["Occupied Slots", occupiedCount],
+    ["Rows With Gaps", matrixRows.filter((row) => row.hours > 0).length],
     ["Minimum Gap", `${Number(filters.minHours || 3).toFixed(1)} hrs`]
   ].map(([label, value]) => `<div class="time-slot-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
   $("#timeSlotAvailableHead").innerHTML = `
@@ -3424,6 +3427,8 @@ function renderTimeSlotPlanner() {
       <th>Date</th>
       <th>Location</th>
       <th>Room No</th>
+      <th>Occupied Batch</th>
+      <th>Free Gaps for CMA</th>
       ${hourColumns.map((hour) => `<th class="timeline-hour">${escapeHtml(hourColumnLabel(hour))}</th>`).join("")}
       <th>Total Free Hrs</th>
     </tr>
@@ -3438,10 +3443,12 @@ function renderTimeSlotPlanner() {
       ${index === 0 ? `<td class="time-slot-date-block" rowspan="${rows.length}"><strong>${escapeHtml(dayLabel(date))}</strong><br><span class="muted">${escapeHtml(date)}</span></td>` : ""}
       <td><strong>${escapeHtml(row.centre)}</strong></td>
       <td>${escapeHtml(row.room)}</td>
+      <td class="time-slot-occupied-list">${occupiedListHtml(row.occupied)}</td>
+      <td class="time-slot-gap-list">${freeGapListHtml(row)}</td>
       ${hourColumns.map((hour) => timelineCellHtml(row, hour)).join("")}
       <td><strong>${row.hours.toFixed(1)}</strong></td>
     </tr>
-  `).join("")).join("") : `<tr><td colspan="${hourColumns.length + 4}" class="empty">${bookings.length ? "No continuous gap of at least 3 hours found between 7am and 9pm for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
+  `).join("")).join("") : `<tr><td colspan="${hourColumns.length + 6}" class="empty">${bookings.length ? "No room-day rows found for these filters." : "Import room Excel to calculate free slots."}</td></tr>`;
 }
 
 function minutes(time) {
@@ -6174,6 +6181,7 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
         if (parseRoomTimeRange(nextCell)) break;
         if (nextCell) detailLines.push(nextCell);
       }
+      const details = [...new Set(detailLines)].join(" | ") || "Room Blocking";
       bookings.push({
         id: uid("room"),
         source: sourceName,
@@ -6182,7 +6190,8 @@ function parseRoomBookingsFromRows(rows, sourceName = "Room Excel") {
         date,
         start: range.start,
         end: range.end,
-        details: [...new Set(detailLines)].join(" | ") || "Room Blocking",
+        batchName: roomBatchNameFromText(details),
+        details,
         importedAt: new Date().toISOString()
       });
     });
@@ -6230,18 +6239,24 @@ function adjacentBookingLabel(bookings, date, room, start, end) {
   ].filter(Boolean).join(" | ") || "-";
 }
 
-function availableRoomSlots(bookings, filters = {}) {
+function roomBookingsForFilters(bookings, filters = {}) {
   const from = filters.from || "";
   const to = filters.to || "";
   const centre = filters.centre || "All";
   const room = filters.room || "All";
+  return (bookings || []).filter((booking) => {
+    if (from && booking.date < from) return false;
+    if (to && booking.date > to) return false;
+    if (centre !== "All" && booking.centre !== centre) return false;
+    if (room !== "All" && booking.room !== room) return false;
+    return true;
+  });
+}
+
+function availableRoomSlots(bookings, filters = {}) {
   const minHours = Number(filters.minHours || 2.5);
   const groups = new Map();
-  bookings.forEach((booking) => {
-    if (from && booking.date < from) return;
-    if (to && booking.date > to) return;
-    if (centre !== "All" && booking.centre !== centre) return;
-    if (room !== "All" && booking.room !== room) return;
+  roomBookingsForFilters(bookings, filters).forEach((booking) => {
     const key = `${booking.date}|${booking.centre}|${booking.room}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(booking);
@@ -6277,25 +6292,62 @@ function freeSlotChip(slot) {
   return `<span class="gap-chip">${escapeHtml(formatTimeShort(slot.start))} - ${escapeHtml(formatTimeShort(slot.end))}</span>`;
 }
 
-function timeSlotMatrixRows(freeSlots) {
+function roomBatchNameFromText(text) {
+  const cleaned = cleanSheetText(text).replace(/\b(no lecture|room blocking|lecture|batch)\b/gi, " ").trim();
+  const cmaMatch = cleaned.match(/\bCMA(?:\s+(?:FINAL|USA|INDIA|I|F|FC)|[A-Z])[\w\s/&().-]{4,80}/i);
+  if (cmaMatch) return cleanSheetText(cmaMatch[0]).replace(/\s+\|\s+.*/, "");
+  const lines = cleaned.split(/\s+\|\s+/).map(cleanSheetText).filter(Boolean);
+  return lines.find((line) => !parseRoomTimeRange(line) && !/^(prof|sir|miss|subject)$/i.test(line)) || "";
+}
+
+function roomBookingBatchName(booking) {
+  return cleanSheetText(booking.batchName) || roomBatchNameFromText(booking.details || "") || "Occupied";
+}
+
+function occupiedBookingChip(booking) {
+  const label = roomBookingBatchName(booking);
+  const details = booking.details && booking.details !== label ? ` | ${booking.details}` : "";
+  return `<span class="occupied-chip" title="${escapeHtml(`${formatTimeRange(booking.start, booking.end)} ${details || label}`)}"><strong>${escapeHtml(formatTimeRange(booking.start, booking.end))}</strong>${escapeHtml(label)}</span>`;
+}
+
+function occupiedListHtml(bookings) {
+  const occupied = (bookings || []).filter((booking) => !booking.openMarker);
+  return occupied.length ? occupied.map(occupiedBookingChip).join("") : `<span class="muted">No occupied batch</span>`;
+}
+
+function freeGapListHtml(row) {
+  const slots = [...row.morning, ...row.afternoon, ...row.evening];
+  return slots.length ? slots.map(freeSlotChip).join("") : `<span class="muted">No gap above minimum</span>`;
+}
+
+function timeSlotMatrixRows(freeSlots, bookings = []) {
   const rows = new Map();
-  freeSlots.forEach((slot) => {
-    const key = `${slot.date}|${slot.centre}|${slot.room}`;
+  const ensureRow = (date, centre, room) => {
+    const key = `${date}|${centre}|${room}`;
     if (!rows.has(key)) {
       rows.set(key, {
-        date: slot.date,
-        centre: slot.centre,
-        room: slot.room,
+        date,
+        centre,
+        room,
         morning: [],
         afternoon: [],
         evening: [],
+        occupied: [],
         hours: 0
       });
     }
-    const row = rows.get(key);
+    return rows.get(key);
+  };
+  bookings.forEach((booking) => {
+    const row = ensureRow(booking.date, booking.centre, booking.room);
+    if (!booking.openMarker) row.occupied.push(booking);
+  });
+  freeSlots.forEach((slot) => {
+    const row = ensureRow(slot.date, slot.centre, slot.room);
     row[freeSlotPeriod(slot)].push(slot);
     row.hours += slot.hours;
   });
+  rows.forEach((row) => row.occupied.sort((a, b) => a.start.localeCompare(b.start)));
   return [...rows.values()].sort((a, b) => `${a.date} ${a.centre} ${a.room}`.localeCompare(`${b.date} ${b.centre} ${b.room}`));
 }
 
@@ -6318,7 +6370,18 @@ function freeSlotStartsInHour(slot, hour) {
   return start >= hour * 60 && start < (hour + 1) * 60;
 }
 
+function bookingCoversHour(booking, hour) {
+  const start = hour * 60;
+  const end = (hour + 1) * 60;
+  return !booking.openMarker && minutes(booking.start) < end && minutes(booking.end) > start;
+}
+
 function timelineCellHtml(row, hour) {
+  const booking = row.occupied.find((item) => bookingCoversHour(item, hour));
+  if (booking) {
+    const label = roomBookingBatchName(booking);
+    return `<td class="timeline-cell occupied" title="${escapeHtml(`${row.room} occupied ${formatTimeRange(booking.start, booking.end)} - ${label}`)}">${escapeHtml(label)}</td>`;
+  }
   const slot = [...row.morning, ...row.afternoon, ...row.evening].find((item) => freeSlotCoversHour(item, hour));
   if (!slot) return `<td class="timeline-cell"></td>`;
   const slotStart = minutes(slot.start);

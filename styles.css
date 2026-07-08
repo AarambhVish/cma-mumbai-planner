@@ -1914,6 +1914,39 @@ tr:last-child td {
   white-space: nowrap;
 }
 
+.occupied-chip {
+  display: grid;
+  gap: 2px;
+  max-width: 260px;
+  margin: 2px 0 5px;
+  padding: 5px 8px;
+  border: 1px solid #f0b4ba;
+  border-radius: 6px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.occupied-chip strong {
+  color: #7f1d1d;
+  font-size: 10px;
+}
+
+.time-slot-occupied-list {
+  min-width: 190px;
+  max-width: 280px;
+  vertical-align: top;
+}
+
+.time-slot-gap-list {
+  min-width: 180px;
+  max-width: 280px;
+  vertical-align: top;
+}
+
 .timeline-hour {
   min-width: 76px;
   text-align: center;
@@ -1958,6 +1991,20 @@ tr:last-child td {
   background: #bff0d2;
   box-shadow: inset 0 0 0 2px var(--brand), inset 4px 0 0 #15803d;
   outline: none;
+}
+
+.timeline-cell.occupied {
+  max-width: 92px;
+  padding: 3px 5px;
+  border-left-color: #f1a5ad;
+  border-right: 1px solid #f1a5ad;
+  background: #ffe4e6;
+  color: #9f1239;
+  font-size: 10px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
 }
 
 .time-slot-date-start > td,
