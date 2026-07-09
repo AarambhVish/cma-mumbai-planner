@@ -1964,6 +1964,35 @@ tr:last-child td {
   white-space: normal;
 }
 
+.timeline-cell.occupied.course-grey {
+  border-left-color: #9ca3af;
+  border-right-color: #9ca3af;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.timeline-cell.occupied.course-green {
+  border-left-color: #22c55e;
+  border-right-color: #22c55e;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.timeline-cell.occupied.course-blue {
+  border-left-color: #3b82f6;
+  border-right-color: #3b82f6;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.timeline-cell.occupied.course-red,
+.timeline-cell.occupied.course-default {
+  border-left-color: #f1a5ad;
+  border-right-color: #f1a5ad;
+  background: #ffe4e6;
+  color: #9f1239;
+}
+
 .time-slot-date-start > td,
 .time-slot-date-start > th {
   border-top: 4px solid var(--ink);
@@ -2194,6 +2223,11 @@ tr:last-child td {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+#timeSlotImportSourceSelect {
+  width: 220px;
+  max-width: 34vw;
 }
 
 .share-actions {

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260708-syllabus-safe-backup">
+    <link rel="stylesheet" href="styles.css?v=20260709-timeslot-course-colors">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -244,6 +244,8 @@
               <span>Import room Excel and find available slots before planning CMA lectures.</span>
             </div>
             <div class="row-actions">
+              <select id="timeSlotImportSourceSelect" aria-label="Imported Time Slot file"></select>
+              <button class="ghost danger" id="deleteTimeSlotImportBtn" type="button">Delete Imported File</button>
               <label class="file-trigger">
                 Import Room Excel(s)
                 <input id="roomExcelInput" type="file" accept=".xlsx,.xls" multiple>
@@ -903,6 +905,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260708-syllabus-safe-backup"></script>
+    <script src="app.js?v=20260709-timeslot-course-colors"></script>
   </body>
 </html>

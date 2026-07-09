@@ -3462,6 +3462,17 @@ function renderAlerts(metrics) {
 function renderTimeSlotPlanner() {
   if (!$("#timeSlotAvailableTable")) return;
   const bookings = (data.roomBookings || []).filter((booking) => !isDoNotUseRoom(booking.room));
+  const importSources = [...new Set((data.roomBookings || []).map((booking) => booking.source).filter(Boolean))].sort();
+  const sourceSelect = $("#timeSlotImportSourceSelect");
+  if (sourceSelect) {
+    const selectedSource = sourceSelect.value || "";
+    const sourceOptions = ["Select imported file", ...importSources];
+    sourceSelect.innerHTML = sourceOptions.map((source) => `<option value="${escapeHtml(source)}">${escapeHtml(source)}</option>`).join("");
+    sourceSelect.value = selectedSource && sourceOptions.includes(selectedSource) ? selectedSource : "Select imported file";
+    sourceSelect.disabled = importSources.length === 0;
+  }
+  const deleteImportBtn = $("#deleteTimeSlotImportBtn");
+  if (deleteImportBtn) deleteImportBtn.disabled = importSources.length === 0;
   const centres = [...new Set(bookings.map((booking) => booking.centre).filter(Boolean))].sort();
   const centreSelect = $("#timeSlotCentreFilter");
   const selectedCentre = centreSelect?.value || "All";
@@ -6382,6 +6393,16 @@ function roomBookingLectureName(booking) {
   return roomLectureNameFromLines(detailLines) || "Occupied";
 }
 
+function timeSlotLectureColorClass(label) {
+  const text = cleanSheetText(label).toUpperCase();
+  if (/\b(11|12)\b/.test(text)) return "course-red";
+  if (/\bACCA\b/.test(text)) return "course-blue";
+  if (/\bCMA\b|CMAI|CMAF|CMAFC/.test(text)) return "course-red";
+  if (/\bCS\b|^CS[A-Z]*\d{2}/.test(text)) return "course-green";
+  if (/\bCA\b|^CA[A-Z]*\d{2}/.test(text)) return "course-grey";
+  return "course-default";
+}
+
 function freeGapListHtml(row) {
   const slots = [...row.morning, ...row.afternoon, ...row.evening];
   return slots.length ? slots.map(freeSlotChip).join("") : `<span class="muted">No gap above minimum</span>`;
@@ -6447,7 +6468,8 @@ function timelineCellHtml(row, hour) {
   const booking = row.occupied.find((item) => bookingCoversHour(item, hour));
   if (booking) {
     const label = roomBookingLectureName(booking);
-    return `<td class="timeline-cell occupied" title="${escapeHtml(`${row.room} occupied ${formatTimeRange(booking.start, booking.end)} - ${label}`)}">${escapeHtml(label)}</td>`;
+    const colorClass = timeSlotLectureColorClass(label);
+    return `<td class="timeline-cell occupied ${colorClass}" title="${escapeHtml(`${row.room} occupied ${formatTimeRange(booking.start, booking.end)} - ${label}`)}">${escapeHtml(label)}</td>`;
   }
   const slot = [...row.morning, ...row.afternoon, ...row.evening].find((item) => freeSlotCoversHour(item, hour));
   if (!slot) return `<td class="timeline-cell"></td>`;
@@ -6577,6 +6599,25 @@ async function importRoomExcel(event) {
   } finally {
     event.target.value = "";
   }
+}
+
+function deleteSelectedTimeSlotImport() {
+  const select = $("#timeSlotImportSourceSelect");
+  const source = select?.value || "";
+  if (!source || source === "Select imported file") {
+    alert("Please select an imported Time Slot file to delete.");
+    return;
+  }
+  const count = (data.roomBookings || []).filter((booking) => booking.source === source).length;
+  if (!count) {
+    alert("No rows found for this imported file.");
+    renderTimeSlotPlanner();
+    return;
+  }
+  if (!confirm(`Delete imported Time Slot file "${source}" and its ${count} room row${count === 1 ? "" : "s"}?`)) return;
+  data.roomBookings = (data.roomBookings || []).filter((booking) => booking.source !== source);
+  saveData();
+  alert(`Deleted imported Time Slot file "${source}".`);
 }
 
 function rawLevelFromBatchName(batchName) {
@@ -8326,6 +8367,7 @@ function bindEvents() {
     renderAlerts([]);
   });
   $("#roomExcelInput")?.addEventListener("change", importRoomExcel);
+  $("#deleteTimeSlotImportBtn")?.addEventListener("click", deleteSelectedTimeSlotImport);
   ["timeSlotCentreFilter", "timeSlotRoomFilter", "timeSlotFrom", "timeSlotTo", "timeSlotMinHours"].forEach((id) => {
     $(`#${id}`)?.addEventListener("input", renderTimeSlotPlanner);
     $(`#${id}`)?.addEventListener("change", renderTimeSlotPlanner);
