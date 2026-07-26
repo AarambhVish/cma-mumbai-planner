@@ -6484,16 +6484,18 @@ function timelineCellHtml(row, hour) {
   return `<td class="timeline-cell free ${edgeClass}" tabindex="0" role="button" data-time-slot-gap="1" data-gap-date="${escapeHtml(row.date)}" data-gap-start="${escapeHtml(slot.start)}" data-gap-end="${escapeHtml(slot.end)}" data-gap-click-time="${String(hour).padStart(2, "0")}:00" data-gap-centre="${escapeHtml(row.centre)}" data-gap-room="${escapeHtml(row.room)}" title="${escapeHtml(`${row.room} free ${formatTimeRange(slot.start, slot.end)} (${slot.hours.toFixed(1)} hrs). Click to use in Weekly Timetable.`)}"></td>`;
 }
 
-function nearbyTimetableSlotOptions(date, clickedTime) {
+function weeklySlotCoversClickedTime(slot, clickedTime) {
   const clickedMinutes = minutes(clickedTime);
-  const from = clickedMinutes - 30;
-  const to = clickedMinutes + 30;
+  return minutes(slot.start) <= clickedMinutes && minutes(slot.end) > clickedMinutes;
+}
+
+function clickedTimetableSlotOptions(date, clickedTime) {
   const ranges = new Map();
   boardTimeSlotsForDate(date, ["All"]).forEach((slot) => {
-    if (minutes(slot.start) >= from && minutes(slot.start) <= to) ranges.set(`${slot.start}|${slot.end}`, { ...slot, batches: [] });
+    if (weeklySlotCoversClickedTime(slot, clickedTime)) ranges.set(`${slot.start}|${slot.end}`, { ...slot, batches: [] });
   });
   data.slots
-    .filter((slot) => slot.date === date && minutes(slot.start) >= from && minutes(slot.start) <= to)
+    .filter((slot) => slot.date === date && weeklySlotCoversClickedTime(slot, clickedTime))
     .forEach((slot) => {
       const key = `${slot.start}|${slot.end}`;
       if (!ranges.has(key)) ranges.set(key, { start: slot.start, end: slot.end, batches: [] });
@@ -6509,17 +6511,17 @@ function chooseAvailableGapSlot(date, start, end, clickedTime, centre = "", room
   const place = [centre, room].filter(Boolean).join(" - ");
   const promptLabel = `${dayLabel(date)}${place ? ` (${place})` : ""}`;
   const defaultStart = minutes(clickedTime) > minutes(start) ? clickedTime : start;
-  const nearby = nearbyTimetableSlotOptions(date, defaultStart);
-  if (nearby.length) {
-    const choices = nearby.map((slot, index) => {
+  const matchingSlots = clickedTimetableSlotOptions(date, defaultStart);
+  if (matchingSlots.length) {
+    const choices = matchingSlots.map((slot, index) => {
       const batches = slot.batches.length ? ` - ${slot.batches.slice(0, 3).join("; ")}` : "";
       return `${index + 1}. ${formatTimeRange(slot.start, slot.end)}${batches}`;
     }).join("\n");
-    const answer = prompt(`Nearby timetable slots around ${formatTimeShort(defaultStart)}:\n${choices}\n\nType option number, or type your own Time In:`, "1");
+    const answer = prompt(`Weekly Time Table slots available at ${formatTimeShort(defaultStart)}:\n${choices}\n\nType option number to use an existing slot, or type your own Time In to create a new one:`, "1");
     if (answer === null) return null;
     const selectedIndex = Number(answer.trim());
-    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= nearby.length) {
-      return { start: nearby[selectedIndex - 1].start, end: nearby[selectedIndex - 1].end };
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= matchingSlots.length) {
+      return { start: matchingSlots[selectedIndex - 1].start, end: matchingSlots[selectedIndex - 1].end };
     }
     const customStart = parseTimePart(answer);
     if (!customStart) {
@@ -6530,7 +6532,7 @@ function chooseAvailableGapSlot(date, start, end, clickedTime, centre = "", room
     if (customEndInput === null) return null;
     return { start: customStart, end: parseTimePart(customEndInput) };
   }
-  const timeIn = prompt(`Available slot: ${promptLabel}\n\nEnter Time In:`, formatTimeShort(defaultStart));
+  const timeIn = prompt(`No Weekly Time Table slot exists at ${formatTimeShort(defaultStart)}.\n\nAvailable slot: ${promptLabel}\n\nEnter Time In to create one:`, formatTimeShort(defaultStart));
   if (timeIn === null) return null;
   const timeOut = prompt(`Available slot: ${promptLabel}\n\nEnter Time Out:`, formatTimeShort(end));
   if (timeOut === null) return null;
