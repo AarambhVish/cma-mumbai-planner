@@ -8,6 +8,12 @@ const googleSheetSource = {
   gvizUrl: "https://docs.google.com/spreadsheets/d/1QC7jdICqY237tKxiOLWJtDJ5Huaa4HSA/gviz/tq?sheet=Batch%20Wise",
   importSource: "google-sheet"
 };
+const syllabusGoogleSheetSource = {
+  id: "1fq0abHYLH3GySlAYUNUujHhXLlk-ejxmPkXzQhTLG6g",
+  gid: "1042083628",
+  link: "https://docs.google.com/spreadsheets/d/1fq0abHYLH3GySlAYUNUujHhXLlk-ejxmPkXzQhTLG6g/edit?gid=1042083628#gid=1042083628",
+  importSource: "syllabus-google-sheet"
+};
 const fixedCloudSyncUrl = "https://script.google.com/macros/s/AKfycbw1FsCcB8Dd3ydpazVSCOZx0qUwrHanZdP4woDRc4z4VVFp1dagHPFetp_YKU2a7OdirA/exec";
 const defaultTimeSlots = [
   { start: "07:00", end: "10:00" },
@@ -647,6 +653,7 @@ const topicMaster = [
   ...topicRows(205, "CMA USA Part 2 - Section E", [["Investment Decisions", 0]]),
   ...topicRows(206, "CMA USA Part 2 - Section F", [["Professional Ethics", 0]])
 ];
+const baseTopicMaster = structuredClone(topicMaster);
 
 const realBatchNames = [
   "CMAF_D26_SHREE_CLASSES",
@@ -1186,6 +1193,42 @@ function resetPaperObjectsToBase() {
   Object.assign(paperShortNames, basePaperShortNames);
 }
 
+function normalizedSyllabusTopicText(value) {
+  return cleanSheetText(value)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\b(advanced|level|the|and|of|in|under|act)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resetTopicMasterToBase() {
+  topicMaster.splice(0, topicMaster.length, ...structuredClone(baseTopicMaster));
+}
+
+function applyImportedSyllabusTopics() {
+  resetTopicMasterToBase();
+  const importedTopics = Array.isArray(data.settings?.importedSyllabusTopics) ? data.settings.importedSyllabusTopics : [];
+  const existingKeys = new Set(topicMaster.map((topic) => `${Number(topic.paperNo)}|${normalizedSyllabusTopicText(topic.chapterName)}`));
+  importedTopics.forEach((topic) => {
+    const paperNo = normalizePaperNo(topic.paperNo);
+    const chapterName = cleanSheetText(topic.chapterName);
+    if (!paperNo || !chapterName) return;
+    const key = `${paperNo}|${normalizedSyllabusTopicText(chapterName)}`;
+    if (existingKeys.has(key)) return;
+    existingKeys.add(key);
+    topicMaster.push({
+      id: topic.id || `gs-p${paperNo}-${slug(chapterName).slice(0, 32)}`,
+      paperNo,
+      paperName: topic.paperName || paperNameByNo(paperNo),
+      chapterName,
+      standardHours: Number(topic.standardHours || 0),
+      importSource: syllabusGoogleSheetSource.importSource
+    });
+  });
+}
+
 function applyPaperMaster() {
   if (!data.settings?.paperMaster) return;
   resetPaperObjectsToBase();
@@ -1231,6 +1274,8 @@ function ensureDataShape() {
   if (!data.settings.batchMasterBackup || typeof data.settings.batchMasterBackup !== "object" || Array.isArray(data.settings.batchMasterBackup)) data.settings.batchMasterBackup = {};
   ensurePaperMasterShape();
   applyPaperMaster();
+  if (!Array.isArray(data.settings.importedSyllabusTopics)) data.settings.importedSyllabusTopics = [];
+  applyImportedSyllabusTopics();
   (data.professors || []).forEach((professor) => rememberProfessorMasterBackup(professor, { onlyIfMissing: true }));
   (data.batches || []).forEach((batch) => rememberBatchMasterBackup(batch, { onlyIfMissing: true }));
   if (!Array.isArray(data.topicPlans)) data.topicPlans = [];
@@ -2070,6 +2115,7 @@ const loginPasswordHash = "f0d2be946f8e877a5221ae0d50e4526462550a175f8260d6cab9b
 let cloudSaveReminderId = null;
 let editingActualLectureId = "";
 let cloudAutoSaveId = null;
+let syllabusAutoRefreshId = null;
 let cloudLoadInProgress = false;
 
 function isLoggedIn() {
@@ -2396,6 +2442,14 @@ function scheduleCloudAutoSave() {
   cloudAutoSaveId = setTimeout(() => saveCloudData({ silent: true }), 5000);
 }
 
+function startSyllabusAutoRefresh() {
+  if (syllabusAutoRefreshId) clearInterval(syllabusAutoRefreshId);
+  if (!isLoggedIn() || isProfessorMode()) return;
+  const refresh = () => updateSyllabusFromGoogleSheet({ silent: true }).catch(() => {});
+  setTimeout(refresh, 8000);
+  syllabusAutoRefreshId = setInterval(refresh, 30 * 60 * 1000);
+}
+
 async function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2413,6 +2467,7 @@ async function handleLogin(event) {
     showLoginGate();
     showInitialCloudPrompt();
     startCloudSaveReminder();
+    startSyllabusAutoRefresh();
     return;
   }
 
@@ -2440,6 +2495,8 @@ async function handleLogin(event) {
 }
 
 function logout() {
+  if (syllabusAutoRefreshId) clearInterval(syllabusAutoRefreshId);
+  syllabusAutoRefreshId = null;
   sessionStorage.removeItem(loginSessionKey);
   sessionStorage.removeItem(loginRoleKey);
   sessionStorage.removeItem(loginProfessorKey);
@@ -6131,6 +6188,138 @@ function googleTableToRows(table) {
   return [headers, ...rows];
 }
 
+function loadGoogleSheetTableByGid(sheetId, gid) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `syllabusSheetImport_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Syllabus Google Sheet did not respond in time"));
+    }, 25000);
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    };
+
+    window[callbackName] = (response) => {
+      cleanup();
+      if (!response || response.status !== "ok" || !response.table) {
+        reject(new Error(response?.errors?.[0]?.detailed_message || "Syllabus Google Sheet returned no table data"));
+        return;
+      }
+      resolve(response.table);
+    };
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Could not load Syllabus Google Sheet"));
+    };
+    script.src = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?gid=${encodeURIComponent(gid)}&tqx=responseHandler:${callbackName}`;
+    document.head.appendChild(script);
+  });
+}
+
+function normalizeBranchText(value) {
+  return cleanSheetText(value).toLowerCase().replace(/dombivli/g, "dombivali").replace(/[^a-z0-9]+/g, "");
+}
+
+function attemptFromSheetBranch(branchName) {
+  const text = cleanSheetText(branchName).toUpperCase();
+  if (/\bJ27\b/.test(text)) return "Jun 2027";
+  if (/\bJ26\b/.test(text)) return "Jun 2026";
+  return "Dec 2026";
+}
+
+function centreFromSheetBranch(branchName) {
+  return cleanSheetText(branchName).replace(/\b[DJ]\d{2}\b/gi, "").trim();
+}
+
+function syllabusBatchForSheetBranch(branchName) {
+  const centre = normalizeBranchText(centreFromSheetBranch(branchName));
+  const attempt = attemptFromSheetBranch(branchName);
+  return data.batches.find((batch) =>
+    batch.level === "Inter" &&
+    batch.attempt === attempt &&
+    normalizeBranchText(batch.centre).includes(centre)
+  ) || data.batches.find((batch) =>
+    batch.level === "Inter" &&
+    batch.attempt === attempt &&
+    normalizeBranchText(batch.name).includes(centre)
+  );
+}
+
+function syllabusSheetStatusIsDone(status) {
+  return /\bcompleted\b/i.test(cleanSheetText(status));
+}
+
+function existingTopicForImportedTopic(paperNo, chapterName) {
+  const normalized = normalizedSyllabusTopicText(chapterName);
+  if (!normalized) return null;
+  return topicMaster.find((topic) =>
+    Number(topic.paperNo) === Number(paperNo) &&
+    normalizedSyllabusTopicText(topic.chapterName) === normalized
+  ) || null;
+}
+
+function parseSyllabusGoogleSheetRows(rows) {
+  const headerIndex = rows.findIndex((row) => row.some((cell) => cleanSheetText(cell).toUpperCase() === "SRNO"));
+  if (headerIndex < 0) throw new Error("Could not find SRNO header in syllabus sheet.");
+  const header = rows[headerIndex] || [];
+  const subHeader = rows[headerIndex + 1] || [];
+  const colIndex = (name) => header.findIndex((cell) => cleanSheetText(cell).toUpperCase() === name);
+  const srCol = colIndex("SRNO");
+  const paperCol = colIndex("PAPER");
+  const subjectCol = colIndex("SUBJECT");
+  const topicCol = colIndex("TOPICS");
+  const actualHoursCol = colIndex("ACTUAL HRS");
+  const plannedHoursCol = colIndex("PLANNED HRS");
+  if ([srCol, paperCol, topicCol].some((index) => index < 0)) throw new Error("Syllabus sheet is missing SRNO, PAPER, or TOPICS columns.");
+  const branches = [];
+  for (let index = plannedHoursCol + 1; index < header.length; index += 1) {
+    const branch = cleanSheetText(header[index]);
+    if (!branch || cleanSheetText(subHeader[index + 1]).toUpperCase() !== "STATUS") continue;
+    branches.push({
+      branch,
+      facultyCol: index,
+      statusCol: index + 1,
+      batch: syllabusBatchForSheetBranch(branch)
+    });
+  }
+  const importedTopics = [];
+  const completions = [];
+  rows.slice(headerIndex + 2).forEach((row) => {
+    const srNo = cleanSheetText(row[srCol]);
+    const topicName = cleanSheetText(row[topicCol]);
+    const paperNo = normalizePaperNo(row[paperCol]);
+    if (!srNo || !topicName || !paperNo) return;
+    const subject = cleanSheetText(row[subjectCol]);
+    const standardHours = Number(row[plannedHoursCol] || row[actualHoursCol] || 0);
+    const existingTopic = existingTopicForImportedTopic(paperNo, topicName);
+    const topicId = existingTopic?.id || `gs-p${paperNo}-${srNo.replace(/[^a-z0-9_-]/gi, "")}`;
+    importedTopics.push({
+      id: topicId,
+      paperNo,
+      paperName: subject ? `${paperCodeLabel(paperNo)} ${subject}` : paperNameByNo(paperNo),
+      chapterName: topicName,
+      standardHours
+    });
+    branches.forEach(({ batch, statusCol, facultyCol }) => {
+      if (!batch || !syllabusSheetStatusIsDone(row[statusCol])) return;
+      completions.push({
+        batchId: batch.id,
+        topicId,
+        professorText: cleanSheetText(row[facultyCol])
+      });
+    });
+  });
+  return {
+    importedTopics,
+    completions,
+    mappedBranches: branches.filter((branch) => branch.batch).length,
+    skippedBranches: branches.filter((branch) => !branch.batch).map((branch) => branch.branch)
+  };
+}
+
 function parseSheetDate(value) {
   const text = cleanSheetText(value).replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b\.?/gi, "").trim();
   const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
@@ -8301,6 +8490,55 @@ function handleSyllabusProfessorChange(event) {
   if (isProfessorMode() && cloudSyncUrl()) saveCloudData({ silent: true });
 }
 
+function updateSyllabusImportStatus(message, tone = "") {
+  const status = $("#syllabusImportStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.className = `cloud-status ${tone}`.trim();
+}
+
+async function updateSyllabusFromGoogleSheet(options = {}) {
+  const silent = Boolean(options.silent);
+  if (!silent) updateSyllabusImportStatus("Updating syllabus...", "saving");
+  try {
+    const table = await loadGoogleSheetTableByGid(syllabusGoogleSheetSource.id, syllabusGoogleSheetSource.gid);
+    const parsed = parseSyllabusGoogleSheetRows(googleTableToRows(table));
+    keepSyllabusBackup("before-syllabus-google-sheet-update", data);
+    data.settings.importedSyllabusTopics = parsed.importedTopics;
+    data.settings.syllabusGoogleSheet = {
+      id: syllabusGoogleSheetSource.id,
+      gid: syllabusGoogleSheetSource.gid,
+      link: syllabusGoogleSheetSource.link,
+      lastImportedAt: new Date().toISOString(),
+      importedTopicCount: parsed.importedTopics.length,
+      completionCount: parsed.completions.length,
+      skippedBranches: parsed.skippedBranches
+    };
+    applyImportedSyllabusTopics();
+    parsed.completions.forEach((completion) => {
+      data.syllabusCompletion[syllabusCompletionKey(completion.batchId, completion.topicId)] = {
+        done: true,
+        professorId: "",
+        source: syllabusGoogleSheetSource.importSource,
+        professorText: completion.professorText || "",
+        _updatedAt: new Date().toISOString(),
+        _updatedBy: localDeviceId()
+      };
+    });
+    saveData({ skipCloudSave: silent || isProfessorMode() });
+    updateSyllabusImportStatus(`Updated ${parsed.importedTopics.length} topics | ${parsed.completions.length} completed`, "saved");
+    if (!silent) {
+      const skipped = parsed.skippedBranches.length ? `\n\nSkipped branches without matching batch: ${parsed.skippedBranches.join(", ")}` : "";
+      alert(`Syllabus sheet updated.\n\nTopics: ${parsed.importedTopics.length}\nCompleted statuses imported: ${parsed.completions.length}\nMapped branches: ${parsed.mappedBranches}${skipped}`);
+    }
+    return parsed;
+  } catch (error) {
+    updateSyllabusImportStatus("Syllabus update failed", "error");
+    if (!silent) alert(`Syllabus sheet update failed: ${error.message}`);
+    throw error;
+  }
+}
+
 function recoverSyllabusCompletion() {
   const before = syllabusCompletionCount(data.syllabusCompletion);
   const backup = bestSyllabusBackup();
@@ -8360,6 +8598,7 @@ function bindEvents() {
   $("#professorHeadSyllabusBody")?.addEventListener("click", handleSyllabusCompletionToggle);
   $("#syllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
   $("#professorHeadSyllabusBody")?.addEventListener("change", handleSyllabusProfessorChange);
+  $("#updateSyllabusSheetBtn")?.addEventListener("click", () => updateSyllabusFromGoogleSheet());
   $("#recoverSyllabusBtn")?.addEventListener("click", recoverSyllabusCompletion);
   $("#alertTypeFilter")?.addEventListener("change", () => renderAlerts([]));
   $("#alertSummaryBoxes")?.addEventListener("click", (event) => {
@@ -8825,4 +9064,7 @@ try {
 }
 render();
 showLoginGate();
-if (isLoggedIn()) startCloudSaveReminder();
+if (isLoggedIn()) {
+  startCloudSaveReminder();
+  startSyllabusAutoRefresh();
+}

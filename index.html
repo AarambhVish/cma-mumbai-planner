@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMA Mumbai Planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260709-timeslot-click-weekly-slots">
+    <link rel="stylesheet" href="styles.css?v=20260726-syllabus-google-sheet-sync">
   </head>
   <body class="app-locked">
     <section class="login-gate" id="loginGate" aria-label="CMA Planner login">
@@ -745,7 +745,9 @@ Professor : Sandesh Sir
                 Attempt
                 <select id="syllabusFilter"></select>
               </label>
+              <button class="ghost" id="updateSyllabusSheetBtn" type="button">Update Syllabus Sheet</button>
               <button class="ghost" id="recoverSyllabusBtn" type="button">Recover Syllabus</button>
+              <span class="cloud-status" id="syllabusImportStatus">Syllabus sheet not checked</span>
               <button class="ghost" id="syllabusFullscreenBtn" type="button">Full Screen</button>
             </div>
           </div>
@@ -905,6 +907,6 @@ Professor : Sandesh Sir
       </label>
     </template>
 
-    <script src="app.js?v=20260709-timeslot-click-weekly-slots"></script>
+    <script src="app.js?v=20260726-syllabus-google-sheet-sync"></script>
   </body>
 </html>
