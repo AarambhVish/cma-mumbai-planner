@@ -6271,6 +6271,12 @@ function syllabusSheetStatusIsDone(status) {
   return /\bcompleted\b/i.test(cleanSheetText(status));
 }
 
+function syllabusSheetProfessorName(value) {
+  const text = cleanSheetText(value);
+  if (!text || syllabusSheetStatusIsDone(text) || /^\d+(\.\d+)?$/.test(text) || /\blecture\b/i.test(text) || /\bongoing\b/i.test(text)) return "";
+  return text;
+}
+
 function existingTopicForImportedTopic(paperNo, chapterName) {
   const normalized = normalizedSyllabusTopicText(chapterName);
   if (!normalized) return null;
@@ -6283,9 +6289,12 @@ function existingTopicForImportedTopic(paperNo, chapterName) {
 function parseSyllabusGoogleSheetRows(rows) {
   const headerIndex = rows.findIndex((row) => {
     const normalized = row.map((cell) => cleanSheetText(cell).toUpperCase());
-    return normalized.includes("PAPER") && normalized.includes("TOPICS") && normalized.includes("MAIN SHEET");
+    return normalized.includes("PAPER") && normalized.includes("TOPICS");
   });
-  if (headerIndex < 0) throw new Error("Could not find syllabus topic header row.");
+  if (headerIndex < 0) {
+    const preview = rows.slice(0, 8).map((row) => row.map(cleanSheetText).filter(Boolean).slice(0, 5).join(" | ")).filter(Boolean).join(" / ");
+    throw new Error(`Could not find syllabus topic header row with PAPER and TOPICS. Sheet preview: ${preview || "blank sheet"}`);
+  }
   const header = rows[headerIndex] || [];
   const subHeader = rows[headerIndex + 1] || [];
   const colIndex = (name) => header.findIndex((cell) => cleanSheetText(cell).toUpperCase() === name);
@@ -6313,11 +6322,12 @@ function parseSyllabusGoogleSheetRows(rows) {
   }
   const importedTopics = [];
   const completions = [];
-  rows.slice(headerIndex + 2).forEach((row) => {
-    const srNo = cleanSheetText(row[srCol]);
+  rows.slice(headerIndex + 1).forEach((row, rowOffset) => {
+    if (row.map((cell) => cleanSheetText(cell).toUpperCase()).includes("STATUS")) return;
+    const srNo = cleanSheetText(row[srCol]) || String(rowOffset + 1);
     const topicName = cleanSheetText(row[topicCol]);
     const paperNo = normalizePaperNo(row[paperCol]);
-    if (!srNo || !topicName || !paperNo) return;
+    if (!topicName || !paperNo) return;
     const subject = cleanSheetText(row[subjectCol]);
     const standardHours = Number(row[plannedHoursCol] || row[actualHoursCol] || 0);
     const existingTopic = existingTopicForImportedTopic(paperNo, topicName);
@@ -6334,7 +6344,8 @@ function parseSyllabusGoogleSheetRows(rows) {
       completions.push({
         batchId: batch.id,
         topicId,
-        professorText: cleanSheetText(row[facultyCol])
+        paperNo,
+        professorText: syllabusSheetProfessorName(row[facultyCol])
       });
     });
   });
@@ -8541,9 +8552,16 @@ async function updateSyllabusFromGoogleSheet(options = {}) {
     };
     applyImportedSyllabusTopics();
     parsed.completions.forEach((completion) => {
+      const batch = batchById(completion.batchId);
+      const paper = paperNameByNo(completion.paperNo);
+      const professor = completion.professorText ? ensureImportedProfessor({
+        name: completion.professorText,
+        levels: batch?.level ? [batch.level] : [],
+        papers: paper ? [paper] : []
+      }) : null;
       data.syllabusCompletion[syllabusCompletionKey(completion.batchId, completion.topicId)] = {
         done: true,
-        professorId: "",
+        professorId: professor?.id || "",
         source: syllabusGoogleSheetSource.importSource,
         professorText: completion.professorText || "",
         _updatedAt: new Date().toISOString(),
