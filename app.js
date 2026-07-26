@@ -6219,6 +6219,22 @@ function loadGoogleSheetTableByGid(sheetId, gid) {
   });
 }
 
+async function loadGoogleSheetCsvRowsByGid(sheetId, gid) {
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/export?format=csv&gid=${encodeURIComponent(gid)}&cb=${Date.now()}`;
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Syllabus CSV returned ${response.status}`);
+  return parseCsvRows(await response.text());
+}
+
+async function loadSyllabusGoogleSheetRows() {
+  try {
+    return await loadGoogleSheetCsvRowsByGid(syllabusGoogleSheetSource.id, syllabusGoogleSheetSource.gid);
+  } catch (csvError) {
+    const table = await loadGoogleSheetTableByGid(syllabusGoogleSheetSource.id, syllabusGoogleSheetSource.gid);
+    return googleTableToRows(table);
+  }
+}
+
 function normalizeBranchText(value) {
   return cleanSheetText(value).toLowerCase().replace(/dombivli/g, "dombivali").replace(/[^a-z0-9]+/g, "");
 }
@@ -6237,13 +6253,16 @@ function centreFromSheetBranch(branchName) {
 function syllabusBatchForSheetBranch(branchName) {
   const centre = normalizeBranchText(centreFromSheetBranch(branchName));
   const attempt = attemptFromSheetBranch(branchName);
-  return data.batches.find((batch) =>
+  const candidates = data.batches.filter((batch) => batch.level === "Inter" && batch.attempt === attempt);
+  return candidates.find((batch) =>
+    normalizeBranchText(batch.centre) === centre
+  ) || candidates.find((batch) =>
+    normalizeBranchText(batch.name).endsWith(centre) || normalizeBranchText(batch.name).includes(`d26${centre}`) || normalizeBranchText(batch.name).includes(`j27${centre}`)
+  ) || candidates.find((batch) =>
     batch.level === "Inter" &&
     batch.attempt === attempt &&
     normalizeBranchText(batch.centre).includes(centre)
-  ) || data.batches.find((batch) =>
-    batch.level === "Inter" &&
-    batch.attempt === attempt &&
+  ) || candidates.find((batch) =>
     normalizeBranchText(batch.name).includes(centre)
   );
 }
@@ -6262,22 +6281,29 @@ function existingTopicForImportedTopic(paperNo, chapterName) {
 }
 
 function parseSyllabusGoogleSheetRows(rows) {
-  const headerIndex = rows.findIndex((row) => row.some((cell) => cleanSheetText(cell).toUpperCase() === "SRNO"));
-  if (headerIndex < 0) throw new Error("Could not find SRNO header in syllabus sheet.");
+  const headerIndex = rows.findIndex((row) => {
+    const normalized = row.map((cell) => cleanSheetText(cell).toUpperCase());
+    return normalized.includes("PAPER") && normalized.includes("TOPICS") && normalized.includes("MAIN SHEET");
+  });
+  if (headerIndex < 0) throw new Error("Could not find syllabus topic header row.");
   const header = rows[headerIndex] || [];
   const subHeader = rows[headerIndex + 1] || [];
   const colIndex = (name) => header.findIndex((cell) => cleanSheetText(cell).toUpperCase() === name);
-  const srCol = colIndex("SRNO");
+  const srCol = colIndex("SRNO") >= 0 ? colIndex("SRNO") : 0;
   const paperCol = colIndex("PAPER");
   const subjectCol = colIndex("SUBJECT");
   const topicCol = colIndex("TOPICS");
-  const actualHoursCol = colIndex("ACTUAL HRS");
-  const plannedHoursCol = colIndex("PLANNED HRS");
-  if ([srCol, paperCol, topicCol].some((index) => index < 0)) throw new Error("Syllabus sheet is missing SRNO, PAPER, or TOPICS columns.");
+  const actualHoursCol = colIndex("ACTUAL HRS") >= 0 ? colIndex("ACTUAL HRS") : 5;
+  const plannedHoursCol = colIndex("PLANNED HRS") >= 0 ? colIndex("PLANNED HRS") : 6;
+  if ([paperCol, topicCol].some((index) => index < 0)) throw new Error("Syllabus sheet is missing PAPER or TOPICS columns.");
   const branches = [];
   for (let index = plannedHoursCol + 1; index < header.length; index += 1) {
     const branch = cleanSheetText(header[index]);
-    if (!branch || cleanSheetText(subHeader[index + 1]).toUpperCase() !== "STATUS") continue;
+    if (!branch) continue;
+    const statusHeader = cleanSheetText(subHeader[index + 1]).toUpperCase();
+    const nextHeaderIsBlank = !cleanSheetText(header[index + 1]);
+    if (statusHeader && statusHeader !== "STATUS") continue;
+    if (!statusHeader && !nextHeaderIsBlank) continue;
     branches.push({
       branch,
       facultyCol: index,
@@ -8501,8 +8527,7 @@ async function updateSyllabusFromGoogleSheet(options = {}) {
   const silent = Boolean(options.silent);
   if (!silent) updateSyllabusImportStatus("Updating syllabus...", "saving");
   try {
-    const table = await loadGoogleSheetTableByGid(syllabusGoogleSheetSource.id, syllabusGoogleSheetSource.gid);
-    const parsed = parseSyllabusGoogleSheetRows(googleTableToRows(table));
+    const parsed = parseSyllabusGoogleSheetRows(await loadSyllabusGoogleSheetRows());
     keepSyllabusBackup("before-syllabus-google-sheet-update", data);
     data.settings.importedSyllabusTopics = parsed.importedTopics;
     data.settings.syllabusGoogleSheet = {
